@@ -6,6 +6,85 @@ function http_router_for(session::ServerSession)
     function create_serve_onefile(path)
         return request::HTTP.Request -> asset_response(normpath(path))
     end
+
+
+    ### New inserted code ###
+    # Add login page route (only if login is required)
+    if login_required(session)
+        HTTP.register!(router, "GET", "/login", create_serve_onefile(project_relative_path(frontend_directory(), "login.html")))
+        
+        # Add authentication route
+        function serve_authenticate(request::HTTP.Request)
+            try
+                body_str = String(request.body)
+                # # Handle both URL-encoded and form data
+                # params = if occursin("=", body_str)
+                #     HTTP.URIParams(body_str)
+                # else
+                #     Dict{String,String}()
+                # end
+
+                # Parse form data properly
+                params = Dict{String,String}()
+                if !isempty(body_str)
+                    # Handle URL-encoded form data (application/x-www-form-urlencoded)
+                    for pair in split(body_str, '&')
+                        if contains(pair, '=')
+                            key_val = split(pair, '=', limit=2)
+                            if length(key_val) == 2
+                                key = HTTP.unescapeuri(key_val[1])
+                                val = HTTP.unescapeuri(key_val[2])
+                                params[key] = val
+                            end
+                        end
+                    end
+                end
+                
+                username = get(params, "username", "")
+                password = get(params, "password", "")
+                
+                if validate_credentials(username, password)
+                    @info "Credentials validated successfully for user: $username"  # Debug output
+                    # Successful login
+                    response = HTTP.Response(302)
+                    
+                    # Check for redirect parameter
+                    uri = HTTP.URI(request.target)
+                    query = HTTP.queryparams(uri)
+                    redirect_path = get(query, "redirect", "/")
+                    
+                    @info "Redirecting to: $redirect_path"  # Debug output
+                    HTTP.setheader(response, "Location" => redirect_path)
+                    add_set_login_cookie!(response)
+                    @info "Login cookie should be set, redirecting..."  # Debug output
+                    response
+                else
+                    @info "Invalid credentials for user: $username"  # Debug output
+                    # Failed login
+                    response = HTTP.Response(302)
+                    error_msg = HTTP.escapeuri("Invalid username or password")
+                    HTTP.setheader(response, "Location" => "./login?error=$error_msg")
+                    response
+                end
+            catch e
+                @warn "Authentication failed" exception = (e, catch_backtrace())
+                error_response(500, "Authentication Error", "Login failed", sprint(showerror, e))
+            end
+        end
+        HTTP.register!(router, "POST", "/authenticate", serve_authenticate)
+        
+        # Add logout route
+        function serve_logout(request::HTTP.Request)
+            response = HTTP.Response(302)
+            HTTP.setheader(response, "Location" => "./login")
+            # Clear both login and secret cookies
+            HTTP.setheader(response, "Set-Cookie" => ["pluto_login=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT", "secret=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT"])
+            response
+        end
+        HTTP.register!(router, "GET", "/logout", serve_logout)
+        HTTP.register!(router, "POST", "/logout", serve_logout)
+    end
+    ### End of new inserted code ###
     
     HTTP.register!(router, "GET", "/", create_serve_onefile(project_relative_path(frontend_directory(), "index.html")))
     HTTP.register!(router, "GET", "/edit", create_serve_onefile(project_relative_path(frontend_directory(), "editor.html")))

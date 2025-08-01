@@ -91,7 +91,7 @@ end
 
 # ╔═╡ 8dec1241-8bd9-4c60-935a-9230b39813b7
 # https://github.com/fonsp/Pluto.jl/issues/2875
-"const x = hey there!
+const x = "hey there!"
 
 # ╔═╡ 466cd22c-bc46-4e35-b3c8-b6f884fd0858
 # https://github.com/fonsp/Pluto.jl/issues/2875
@@ -99,12 +99,12 @@ md"""
 
 asdf
 
-sdf [23]()
+sdf[23]()
 
 # asf _sdf_
 
 sdf
-
+"""
 # ╔═╡ 259280cc-5468-4e7d-94c5-6679d7059685
 #  https://github.com/fonsp/Pluto.jl/issues/3065
 x.var"abc"

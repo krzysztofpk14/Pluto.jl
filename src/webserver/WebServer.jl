@@ -139,6 +139,7 @@ function run(session::ServerSession)
     Base.wait(run!(session))
 end
 
+###### Najważniejsza funkcja - to ona otwiera nowego notebooka ######
 function run!(session::ServerSession)
     if is_first_run[]
         is_first_run[] = false
@@ -328,6 +329,7 @@ function run!(session::ServerSession)
     else
         @info("\nGo to $address in your browser to start writing ~ have fun!")
     end
+    @info("Made some changes here")
     @info("\nPress Ctrl+C in this terminal to stop Pluto\n\n")
 
     # Trigger ServerStartEvent with server details

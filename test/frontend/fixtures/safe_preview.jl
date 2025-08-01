@@ -50,7 +50,9 @@ return html`<div style="color: red;">DANGER</div>`
 end
 
 # ╔═╡ 55c74b79-41a6-461e-99c4-a61994673824
+md"""
 modify me to make me safe
+"""
 
 # ╔═╡ f5209e95-761d-4861-a00d-b7e33a1b3d69
 

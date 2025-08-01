@@ -1,45 +1,124 @@
 import .Throttled
 
+
+# Add these login credentials and functions after the existing imports
+const LOGIN_CREDENTIALS = Dict(
+    "admin" => "password123",  # Change these credentials as needed
+    "user" => "plutouser"
+)
+
 """
-Return whether the `request` was authenticated in one of two ways:
-1. the session's `secret` was included in the URL as a search parameter, or
-2. the session's `secret` was included in a cookie.
+Check if the request has a valid login session cookie.
 """
-function is_authenticated(session::ServerSession, request::HTTP.Request)
-    (
-        secret_in_url = try
-            uri = HTTP.URI(request.target)
-            query = HTTP.queryparams(uri)
-            get(query, "secret", "") == session.secret
-        catch e
-            @warn "Failed to authenticate request using URL" exception = (e, catch_backtrace())
-            false
-        end
-    ) || (
-        secret_in_cookie = try
-            cookies = HTTP.cookies(request)
-            any(cookies) do cookie
-                cookie.name == "secret" && cookie.value == session.secret
+function is_login_authenticated(request::HTTP.Request)
+    try
+        cookies = HTTP.cookies(request)
+        @info "Checking cookies: $(length(cookies)) found"  # Debug output
+        for cookie in cookies
+            @info "Cookie: $(cookie.name) = $(cookie.value)"  # Debug output
+            if cookie.name == "pluto_login" && is_valid_login_token(cookie.value)
+                @info "Valid login cookie found!"  # Debug output
+                return true
             end
-        catch e
-            @warn "Failed to authenticate request using cookies" exception = (e, catch_backtrace())
-            false
         end
-    )
-    # that ) || ( kind of looks like Krabs from spongebob
+        @info "No valid login cookie found"  # Debug output
+        return false
+    catch e
+        @warn "Failed to authenticate request using login cookies" exception = (e, catch_backtrace())
+        false
+    end
 end
 
-# Function to log the url with secret on the Julia CLI when a request comes to the server without the secret. Executes at most once every 5 seconds
-const log_secret_throttled = Throttled.simple_leading_throttle(5) do session::ServerSession, request::HTTP.Request
+"""
+Validate login token (simple implementation - in production use proper JWT or session management)
+"""
+function is_valid_login_token(token::String)
+    # Simple token validation - should be replaced with proper session management
+    expected_token = "login_authenticated_$(hash("pluto_login_session", UInt(12345)))"
+    return token == expected_token
+end
+
+"""
+Create a login session cookie
+"""
+function create_login_cookie()
+    token = "login_authenticated_$(hash("pluto_login_session", UInt(12345)))"
+    return HTTP.Cookie("pluto_login", token, path="/", httponly=true, maxage=3600) # 1 hour
+end
+
+"""
+Validate user credentials
+"""
+function validate_credentials(username::String, password::String)
+    return haskey(LOGIN_CREDENTIALS, username) && LOGIN_CREDENTIALS[username] == password
+end
+
+"""
+Check if login is required for this session
+"""
+function login_required(session::ServerSession)
+    # Enable login if credentials are configured and security is enabled
+    return true
+    # return !isempty(LOGIN_CREDENTIALS) && (
+    #     session.options.security.require_secret_for_access ||
+    #     session.options.security.require_secret_for_open_links
+    # )
+end
+
+# Update the existing is_authenticated function to also check login authentication
+function is_authenticated(session::ServerSession, request::HTTP.Request)
+    # Check login authentication first, then fall back to secret authentication
+    return is_login_authenticated(request) 
+    # || (
+    #     secret_in_url = try
+    #         uri = HTTP.URI(request.target)
+    #         query = HTTP.queryparams(uri)
+    #         get(query, "secret", "") == session.secret
+    #     catch e
+    #         @warn "Failed to authenticate request using URL" exception = (e, catch_backtrace())
+    #         false
+    #     end
+    # ) || (
+    #     secret_in_cookie = try
+    #         cookies = HTTP.cookies(request)
+    #         any(cookies) do cookie
+    #             cookie.name == "secret" && cookie.value == session.secret
+    #         end
+    #     catch e
+    #         @warn "Failed to authenticate request using cookies" exception = (e, catch_backtrace())
+    #         false
+    #     end
+    # )
+    # # that ) || ( kind of looks like Krabs from spongebob
+end
+
+# # Function to log the url with secret on the Julia CLI when a request comes to the server without the secret. Executes at most once every 5 seconds
+# const log_secret_throttled = Throttled.simple_leading_throttle(5) do session::ServerSession, request::HTTP.Request
+#     host = HTTP.header(request, "Host")
+#     target = request.target
+#     url = Text(string(HTTP.URI(HTTP.URI("http://$host/"); query=Dict("secret" => session.secret))))
+#     @info("No longer authenticated? Visit this URL to continue:", url)
+# end
+
+# Update the log function to be more appropriate for login-based authentication
+const log_login_required_throttled = Throttled.simple_leading_throttle(5) do session::ServerSession, request::HTTP.Request
     host = HTTP.header(request, "Host")
-    target = request.target
-    url = Text(string(HTTP.URI(HTTP.URI("http://$host/"); query=Dict("secret" => session.secret))))
-    @info("No longer authenticated? Visit this URL to continue:", url)
+    login_url = "http://$host/login"
+    @info("Authentication required. Please visit the login page:", login_url)
 end
 
-
+# Update add_set_secret_cookie! to also handle login cookies
 function add_set_secret_cookie!(session::ServerSession, response::HTTP.Response)
     HTTP.setheader(response, "Set-Cookie" => "secret=$(session.secret); SameSite=Strict; HttpOnly")
+    response
+end
+
+function add_set_login_cookie!(response::HTTP.Response)
+    # HTTP.setheader(response, "Set-Cookie" => string(create_login_cookie()))
+    cookie = create_login_cookie()
+    cookie_string = "$(cookie.name)=$(cookie.value); Path=$(cookie.path); HttpOnly; Max-Age=$(cookie.maxage)"
+    HTTP.setheader(response, "Set-Cookie" => cookie_string)
+    @info "Setting login cookie: $cookie_string"  # Debug output
     response
 end
 
@@ -59,40 +138,28 @@ end
 
 session_from_context(request::HTTP.Request) = request.context[:pluto_session]::ServerSession
 
-
+# Update auth_required to consider login authentication
 function auth_required(session::ServerSession, request::HTTP.Request)
     path = HTTP.URI(request.target).path
     ext = splitext(path)[2]
-    security = session.options.security
+    # security = session.options.security
 
-    if path ∈ ("/ping", "/possible_binder_token_please") || ext ∈ (".ico", ".js", ".css", ".png", ".gif", ".svg", ".ico", ".woff2", ".woff", ".ttf", ".eot", ".otf", ".json", ".map")
+    # Skip authentication for login-related paths
+    if path ∈ ("/login", "/authenticate", "/logout") || 
+       path ∈ ("/ping", "/possible_binder_token_please") || 
+       ext ∈ (".ico", ".js", ".css", ".png", ".gif", ".svg", ".ico", ".woff2", ".woff", ".ttf", ".eot", ".otf", ".json", ".map")
         false
-    elseif path ∈ ("", "/")
-        # / does not need security.require_secret_for_open_links, because this is how we handle the configuration where:
-        #    require_secret_for_open_links == true
-        #    require_secret_for_access == false
-        # 
-        # This means that access to all 'risky' endpoints is restricted to authenticated requests (to prevent CSRF), but we allow an unauthenticated request to visit the `/` page and acquire the cookie (see `add_set_secret_cookie!`).
-        # 
-        # (By default, `require_secret_for_access` (and `require_secret_for_open_links`) is `true`.)
-        security.require_secret_for_access
+    # elseif path ∈ ("", "/")
+    #     # For root path, check if login is required or just secret
+    #     login_required(session) || security.require_secret_for_access
     else
-        security.require_secret_for_access || 
-        security.require_secret_for_open_links
+        # login_required(session) || security.require_secret_for_access || 
+        # security.require_secret_for_open_links
+        true
     end
 end
 
-
-"""
-    auth_middleware(f::HTTP.Handler) -> HTTP.Handler
-
-Returns an `HTTP.Handler` (i.e. a function `HTTP.Request → HTTP.Response`) which does three things:
-1. Check whether the request is authenticated (by calling `is_authenticated`), if not, return a 403 error.
-2. Call your `f(request)` to create the response message.
-3. Add a `Set-Cookie` header to the response with the session's `secret`.
-
-This is for HTTP requests, the authentication mechanism for WebSockets is separate.
-"""
+# Update the auth_middleware function's error response to redirect to login if available
 function auth_middleware(handler)
     return function (request::HTTP.Request)
         session = session_from_context(request)
@@ -104,13 +171,25 @@ function auth_middleware(handler)
                 filter!(p -> p[1] != "Access-Control-Allow-Origin", response.headers)
                 HTTP.setheader(response, "Access-Control-Allow-Origin" => "*")
             end
-            if required || HTTP.URI(request.target).path ∈ ("", "/")
-                add_set_secret_cookie!(session, response)
+            # if required || HTTP.URI(request.target).path ∈ ("", "/")
+           if required && is_authenticated(session, request)
+                # add_set_secret_cookie!(session, response)
+                add_set_login_cookie!(response)
             end
             response
         else
-            log_secret_throttled(session, request)
-            error_response(403, "Not yet authenticated", "<b>Open the link that was printed in the terminal where you launched Pluto.</b> It includes a <em>secret</em>, which is needed to access this server.<br><br>If you are running the server yourself and want to change this configuration, have a look at the keyword arguments to <em>Pluto.run</em>. <br><br>Please <a href='https://github.com/fonsp/Pluto.jl/issues'>report this error</a> if you did not expect it!")
+            log_login_required_throttled(session, request)
+            # Redirect to login if login system is enabled, otherwise show the original error
+            response = HTTP.Response(302)
+            # Preserve the intended destination in the redirect
+            original_path = HTTP.URI(request.target).path
+            redirect_url = if original_path == "/" || original_path == ""
+                "./login"
+            else
+                "./login?redirect=" * HTTP.escapeuri(original_path)
+            end
+            HTTP.setheader(response, "Location" => redirect_url)
+            response
         end
     end
 end

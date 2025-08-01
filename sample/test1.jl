@@ -160,7 +160,9 @@ eg(1)
 md"## Bad errors"
 
 # ╔═╡ ee92a570-b166-11ea-38fa-0f3563b3f790
+md"""
 TODO: add that error showing error to the Julia tests
+"""
 
 # ╔═╡ 4f32c16e-b15e-11ea-314e-01700baeb92d
 md"# Bonds"
