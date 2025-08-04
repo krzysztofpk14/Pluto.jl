@@ -7,10 +7,10 @@ function http_router_for(session::ServerSession)
         return request::HTTP.Request -> asset_response(normpath(path))
     end
 
-    ```
+    """
     Helper function to handle user-specific operations 
     and execute them in user's folder
-    ```
+    """
     function with_user_working_directory(user, operation)
         """Execute operation in user's notebooks directory"""
         @info "User object type: $(typeof(user))"
