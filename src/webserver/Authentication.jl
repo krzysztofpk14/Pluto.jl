@@ -1,32 +1,23 @@
-import .Throttled
-
-
-# Add these login credentials and functions after the existing imports
-const LOGIN_CREDENTIALS = Dict(
-    "admin" => "password123",  # Change these credentials as needed
-    "user" => "plutouser"
-)
-
 """
-Check if the request has a valid login session cookie.
+Check if the request has a valid login sesson cookie.
 """
-function is_login_authenticated(request::HTTP.Request)
+# Update authentication functions for multi-user
+function is_authenticated(session::ServerSession, request::HTTP.Request)::Union{User, Nothing}
+    # Check for user session token
     try
         cookies = HTTP.cookies(request)
-        @info "Checking cookies: $(length(cookies)) found"  # Debug output
         for cookie in cookies
-            @info "Cookie: $(cookie.name) = $(cookie.value)"  # Debug output
-            if cookie.name == "pluto_login" && is_valid_login_token(cookie.value)
-                @info "Valid login cookie found!"  # Debug output
-                return true
+            if cookie.name == "pluto_user_session"
+                user = get_user_from_session(cookie.value)
+                if user !== nothing
+                    return user
+                end
             end
         end
-        @info "No valid login cookie found"  # Debug output
-        return false
     catch e
-        @warn "Failed to authenticate request using login cookies" exception = (e, catch_backtrace())
-        false
+        @warn "Failed to authenticate user session" exception = (e, catch_backtrace())
     end
+    return nothing
 end
 
 """
@@ -65,32 +56,6 @@ function login_required(session::ServerSession)
     # )
 end
 
-# Update the existing is_authenticated function to also check login authentication
-function is_authenticated(session::ServerSession, request::HTTP.Request)
-    # Check login authentication first, then fall back to secret authentication
-    return is_login_authenticated(request) 
-    # || (
-    #     secret_in_url = try
-    #         uri = HTTP.URI(request.target)
-    #         query = HTTP.queryparams(uri)
-    #         get(query, "secret", "") == session.secret
-    #     catch e
-    #         @warn "Failed to authenticate request using URL" exception = (e, catch_backtrace())
-    #         false
-    #     end
-    # ) || (
-    #     secret_in_cookie = try
-    #         cookies = HTTP.cookies(request)
-    #         any(cookies) do cookie
-    #             cookie.name == "secret" && cookie.value == session.secret
-    #         end
-    #     catch e
-    #         @warn "Failed to authenticate request using cookies" exception = (e, catch_backtrace())
-    #         false
-    #     end
-    # )
-    # # that ) || ( kind of looks like Krabs from spongebob
-end
 
 # # Function to log the url with secret on the Julia CLI when a request comes to the server without the secret. Executes at most once every 5 seconds
 # const log_secret_throttled = Throttled.simple_leading_throttle(5) do session::ServerSession, request::HTTP.Request
@@ -107,18 +72,25 @@ const log_login_required_throttled = Throttled.simple_leading_throttle(5) do ses
     @info("Authentication required. Please visit the login page:", login_url)
 end
 
-# Update add_set_secret_cookie! to also handle login cookies
-function add_set_secret_cookie!(session::ServerSession, response::HTTP.Response)
-    HTTP.setheader(response, "Set-Cookie" => "secret=$(session.secret); SameSite=Strict; HttpOnly")
-    response
-end
+# # Update add_set_secret_cookie! to also handle login cookies
+# function add_set_secret_cookie!(session::ServerSession, response::HTTP.Response)
+#     HTTP.setheader(response, "Set-Cookie" => "secret=$(session.secret); SameSite=Strict; HttpOnly")
+#     response
+# end
 
-function add_set_login_cookie!(response::HTTP.Response)
-    # HTTP.setheader(response, "Set-Cookie" => string(create_login_cookie()))
-    cookie = create_login_cookie()
-    cookie_string = "$(cookie.name)=$(cookie.value); Path=$(cookie.path); HttpOnly; Max-Age=$(cookie.maxage)"
+# function add_set_login_cookie!(response::HTTP.Response)
+#     # HTTP.setheader(response, "Set-Cookie" => string(create_login_cookie()))
+#     cookie = create_login_cookie()
+#     cookie_string = "$(cookie.name)=$(cookie.value); Path=$(cookie.path); HttpOnly; Max-Age=$(cookie.maxage)"
+#     HTTP.setheader(response, "Set-Cookie" => cookie_string)
+#     @info "Setting login cookie: $cookie_string"  # Debug output
+#     response
+# end
+
+function add_set_login_cookie!(response::HTTP.Response, session_token::String)
+    cookie_string = "pluto_user_session=$session_token; Path=/; HttpOnly; Max-Age=28800"  # 8 hours
     HTTP.setheader(response, "Set-Cookie" => cookie_string)
-    @info "Setting login cookie: $cookie_string"  # Debug output
+    @info "Setting user session cookie: $session_token"
     response
 end
 
@@ -130,6 +102,11 @@ function create_session_context_middleware(session::ServerSession)
     function session_context_middleware(handler::Function)::Function
         function(request::HTTP.Request)
             request.context[:pluto_session] = session
+            # Add user context if authenticated
+            user = is_authenticated(session, request)
+            if user !== nothing
+                request.context[:pluto_user] = user
+            end
             handler(request)
         end
     end
@@ -137,6 +114,8 @@ end
 
 
 session_from_context(request::HTTP.Request) = request.context[:pluto_session]::ServerSession
+
+user_from_context(request::HTTP.Request) = get(request.context, :pluto_user, nothing)
 
 # Update auth_required to consider login authentication
 function auth_required(session::ServerSession, request::HTTP.Request)
@@ -165,17 +144,21 @@ function auth_middleware(handler)
         session = session_from_context(request)
         required = auth_required(session, request)
         
-        if !required || is_authenticated(session, request)
+        # Fix: Check authentication properly - is_authenticated returns User or nothing
+        authenticated_user = is_authenticated(session, request)
+        is_user_authenticated = authenticated_user !== nothing
+
+        if !required || is_user_authenticated
             response = handler(request)
             if !required
                 filter!(p -> p[1] != "Access-Control-Allow-Origin", response.headers)
                 HTTP.setheader(response, "Access-Control-Allow-Origin" => "*")
             end
             # if required || HTTP.URI(request.target).path ∈ ("", "/")
-           if required && is_authenticated(session, request)
-                # add_set_secret_cookie!(session, response)
-                add_set_login_cookie!(response)
-            end
+            # if required && is_authenticated(session, request)
+            #     # add_set_secret_cookie!(session, response)
+            #     add_set_login_cookie!(response)
+            # end
             response
         else
             log_login_required_throttled(session, request)

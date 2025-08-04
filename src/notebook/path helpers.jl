@@ -92,11 +92,14 @@ end
 
 function new_notebooks_directory()
     try
-        path = get(
-			ENV,
-			"JULIA_PLUTO_NEW_NOTEBOOKS_DIR",
-			joinpath(first(DEPOT_PATH), "pluto_notebooks")
-		)
+        # path = get(
+		# 	ENV,
+		# 	"JULIA_PLUTO_NEW_NOTEBOOKS_DIR",
+		# 	joinpath(first(DEPOT_PATH), "pluto_notebooks")
+		# )
+
+		path = pwd()  ## PWD for now, specific user folder in SessionActions.jl
+
         if !isdir(path)
             mkdir(path)
         end

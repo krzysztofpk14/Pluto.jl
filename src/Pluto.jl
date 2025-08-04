@@ -58,6 +58,7 @@ include("./notebook/Notebook.jl")
 include("./notebook/saving and loading.jl")
 include("./notebook/frontmatter.jl")
 include("./notebook/Events.jl")
+include("./webserver/UserManager.jl") # Added before Session
 include("./webserver/Session.jl")
 include("./webserver/PutUpdates.jl")
 

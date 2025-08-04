@@ -3,14 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Pluto.jl Login</title>
+    <title>finQbit x Pluto.jl</title>
     <style>
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             margin: 0;
             padding: 0;
-            height: 100vh;
+            min-height: 100vh;
             display: flex;
             justify-content: center;
             align-items: center;
@@ -77,25 +77,35 @@
             margin-top: 1rem;
             text-align: center;
         }
-        .secret-option {
-            margin-top: 1.5rem;
-            text-align: center;
+        .demo-accounts {
+            margin-top: 2rem;
+            padding: 1rem;
+            background: #f8f9fa;
+            border-radius: 5px;
+            border-left: 4px solid #667eea;
+        }
+        .demo-accounts h3 {
+            margin: 0 0 0.5rem 0;
+            color: #333;
             font-size: 0.9rem;
+        }
+        .demo-accounts p {
+            margin: 0.25rem 0;
+            font-size: 0.85rem;
             color: #666;
         }
-        .secret-option a {
-            color: #667eea;
-            text-decoration: none;
-        }
-        .secret-option a:hover {
-            text-decoration: underline;
+        .demo-accounts code {
+            background: #e9ecef;
+            padding: 0.2rem 0.4rem;
+            border-radius: 3px;
+            font-family: monospace;
         }
     </style>
 </head>
 <body>
     <div class="login-container">
         <div class="logo">
-            <h1>🎈 Pluto.jl</h1>
+            <h1> finQbit x Pluto.jl</h1>
             <p>Please log in to continue</p>
         </div>
         <form method="POST" action="./authenticate">
@@ -110,8 +120,12 @@
             <button type="submit" class="login-btn">Log In</button>
             <div class="error" id="error-message" style="display: none;"></div>
         </form>
-        <div class="secret-option">
-            Or <a href="./" id="secret-link">use secret authentication</a>
+        
+        <div class="demo-accounts">
+            <h3>Demo Accounts</h3>
+            <p><strong>Admin:</strong> <code>admin</code> / <code>admin123</code></p>
+            <p><strong>User 1:</strong> <code>user1</code> / <code>password1</code></p>
+            <p><strong>User 2:</strong> <code>user2</code> / <code>password2</code></p>
         </div>
     </div>
 
@@ -124,12 +138,21 @@
             errorDiv.textContent = decodeURIComponent(error);
             errorDiv.style.display = 'block';
         }
-
-        // Update secret link with current secret if available
-        const secret = urlParams.get('secret');
-        if (secret) {
-            document.getElementById('secret-link').href = './?secret=' + secret;
-        }
+        
+        // Quick login buttons for demo
+        document.querySelectorAll('.demo-accounts code').forEach(code => {
+            code.style.cursor = 'pointer';
+            code.addEventListener('click', () => {
+                const text = code.textContent;
+                if (text.includes('@') || text.length > 15) return;
+                
+                if (text === 'admin' || text === 'user1' || text === 'user2') {
+                    document.getElementById('username').value = text;
+                } else {
+                    document.getElementById('password').value = text;
+                }
+            });
+        });
     </script>
 </body>
 </html>

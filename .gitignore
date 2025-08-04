@@ -21,3 +21,6 @@ frontend/package-lock.json
 profile.pb.gz
 
 test/snapshots
+
+# User Folders
+pluto_user

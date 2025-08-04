@@ -396,9 +396,23 @@ responses[:current_time] = function response_current_time(🙋::ClientRequest)
 end
 
 responses[:connect] = function response_connect(🙋::ClientRequest)
+    # Add user info to connect response
+    user_info = if 🙋.initiator.client.user !== nothing
+        user = 🙋.initiator.client.user
+        Dict(
+            :username => user.username,
+            :home_directory => user.home_directory,
+            :max_notebooks => user.max_notebooks,
+            :is_multi_user => true
+        )
+    else
+        Dict(:is_multi_user => false)
+    end
+    
     putclientupdates!(🙋.session, 🙋.initiator, UpdateMessage(:👋, Dict(
         :notebook_exists => (🙋.notebook !== nothing),
         :session_options => 🙋.session.options,
+        :user_info => user_info,
         :version_info => Dict(
             :pluto => PLUTO_VERSION_STR,
             :julia => JULIA_VERSION_STR,
@@ -468,7 +482,19 @@ responses[:run_multiple_cells] = function response_run_multiple_cells(🙋::Clie
 end
 
 responses[:get_all_notebooks] = function response_get_all_notebooks(🙋::ClientRequest)
-    putplutoupdates!(🙋.session, clientupdate_notebook_list(🙋.session.notebooks, initiator=🙋.initiator))
+        # Get user from client context
+    # if haskey(🙋.initiator.client.stream.context, :pluto_user)
+    #     user = 🙋.initiator.client.stream.context[:pluto_user]
+    #     user_notebooks = get_user_notebooks(🙋.session, user.id)
+    #     putplutoupdates!(🙋.session, clientupdate_notebook_list(Dict(nb.notebook_id => nb for nb in user_notebooks), initiator=🙋.initiator, user_id=user.id))
+    if 🙋.initiator.client.user !== nothing
+        user = 🙋.initiator.client.user
+        user_notebooks = get_user_notebooks(🙋.session, user.id)
+        putplutoupdates!(🙋.session, clientupdate_notebook_list(Dict(nb.notebook_id => nb for nb in user_notebooks), initiator=🙋.initiator))
+    else
+        # Fallback for non-authenticated users
+        putplutoupdates!(🙋.session, clientupdate_notebook_list(🙋.session.notebooks, initiator=🙋.initiator))
+    end
 end
 
 responses[:interrupt_all] = function response_interrupt_all(🙋::ClientRequest)

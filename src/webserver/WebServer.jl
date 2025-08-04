@@ -144,6 +144,11 @@ function run!(session::ServerSession)
     if is_first_run[]
         is_first_run[] = false
         @info "Loading..."
+
+         # Initialize the multi-user system
+        initialize_default_users()
+        @info "Available users: $(join([u.username for u in values(USERS)], ", "))"
+        @info "Default login: admin/admin123 or user1/password1"
     end
 
     warn_julia_compat()
@@ -153,12 +158,28 @@ function run!(session::ServerSession)
     app = pluto_router |> auth_middleware |> store_session_middleware
 
     let n = session.options.server.notebook
-        SessionActions.open.((session,), 
-            n === nothing ? [] : 
-            n isa AbstractString ? [n] : 
-            n;
-            run_async=true,
-        )
+        # Skip auto-opening notebooks in multi-user mode
+        if !login_required(session)
+            SessionActions.open.((session,), 
+                n === nothing ? [] : 
+                n isa AbstractString ? [n] : 
+                n;
+                run_async=true,
+            )
+        end
+    end
+
+     # Start background cleanup task for expired sessions
+    cleanup_task = @async begin
+        while true
+            sleep(300)  # Cleanup every 5 minutes
+            try
+                cleanup_expired_sessions()
+                @debug "Cleaned up expired user sessions"
+            catch e
+                @warn "Failed to cleanup expired sessions" exception=e
+            end
+        end
     end
 
     host = session.options.server.host
@@ -172,6 +193,10 @@ function run!(session::ServerSession)
         # Triggered by HTTP.jl
         @info("\nClosing Pluto... Restart Julia for a fresh session. \n\nHave a nice day! 🎈\n\n")
         # TODO: put do_work tokens back 
+
+        # Cancel cleanup task
+        Base.schedule(cleanup_task, InterruptException(), error=true)
+
         @async swallow_exception(() -> close(serversocket), Base.IOError)
         for client in values(session.connected_clients)
             @async swallow_exception(() -> close(client.stream), Base.IOError)
@@ -199,7 +224,12 @@ function run!(session::ServerSession)
                     rethrow(e)
                 end
             end
-            if !secret_required || is_authenticated(session, http.message)
+            
+            # Fix: Check authentication properly for multi-user
+            authenticated_user = is_authenticated(session, http.message)
+            is_auth_ok = authenticated_user !== nothing
+            
+            if !secret_required || is_auth_ok
                 try
                     # "upgrade" means accept and start the websocket connection that the client requested
                     HTTP.WebSockets.upgrade(http) do clientstream
@@ -207,7 +237,17 @@ function run!(session::ServerSession)
                             return
                         end
                         found_client_id_ref = Ref(Symbol(:none))
+                        authenticated_user_ref = Ref(authenticated_user)  # Store user in a reference
+                        
+
+
                         try
+                            # Add user context to websocket stream if authenticated
+                            # if authenticated_user !== nothing
+                            #     clientstream.context = Dict{Symbol,Any}()
+                            #     clientstream.context[:pluto_user] = authenticated_user
+                            # end
+                            
                             # the loop below will keep running for this websocket connection, it iterates over all incoming websocket messages.
                             for message in clientstream
                                 # This stream contains data received over the WebSocket.
@@ -227,7 +267,7 @@ function run!(session::ServerSession)
                                     if found_client_id_ref[] === :none
                                         found_client_id_ref[] = Symbol(parentbody["client_id"])
                                     end
-                                    process_ws_message(session, parentbody, clientstream)
+                                    process_ws_message(session, parentbody, clientstream, authenticated_user_ref[])
                                 catch ex
                                     if ex isa InterruptException || ex isa HTTP.WebSockets.WebSocketError || ex isa EOFError
                                         # that's fine!
@@ -329,7 +369,11 @@ function run!(session::ServerSession)
     else
         @info("\nGo to $address in your browser to start writing ~ have fun!")
     end
-    @info("Made some changes here")
+    @info("Multi-User Pluto is running! Please log in to continue.")
+    @info("\nAvailable users:")
+    for user in values(USERS)
+        @info("  Username: $(user.username) | Home: $(user.home_directory)")
+    end
     @info("\nPress Ctrl+C in this terminal to stop Pluto\n\n")
 
     # Trigger ServerStartEvent with server details
@@ -397,13 +441,18 @@ All messages sent over the WebSocket from the client get decoded+deserialized an
 
 It calls one of the functions from the `responses` Dict, see the file Dynamic.jl.
 """
-function process_ws_message(session::ServerSession, parentbody::Dict, clientstream)
+function process_ws_message(session::ServerSession, parentbody::Dict, clientstream, authenticated_user=nothing)
     client_id = Symbol(parentbody["client_id"])
     client = get!(session.connected_clients, client_id) do 
         ClientSession(client_id, clientstream, session.options.server.simulated_lag)
     end
     client.stream = clientstream # it might change when the same client reconnects
 
+    # Update user context if not already set
+    if client.user === nothing && authenticated_user !== nothing
+        client.user = authenticated_user
+    end
+    
     messagetype = Symbol(parentbody["type"])
     request_id = Symbol(parentbody["request_id"])
 
