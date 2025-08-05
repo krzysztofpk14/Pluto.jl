@@ -114,7 +114,7 @@ function clientupdate_notebook_list(notebooks; initiator::Union{Initiator,Nothin
             :notebooks => [
                 Dict(
                     :notebook_id => notebook.notebook_id,
-                    :path => notebook.path,
+                    :path => notebook.path, # TODO: Tutaj jest pełna ścieżka do notebooka. Myślę, że nie powinna ona być ujawniana klientowi.
                     :in_temp_dir => startswith(notebook.path, new_notebooks_directory()),
                     :shortpath => basename(notebook.path),
                     :process_status => notebook.process_status,

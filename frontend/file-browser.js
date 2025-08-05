@@ -43,6 +43,73 @@ class PlutoFileBrowser {
         
         checkForClient();
     }
+
+    setupResizeHandle() {
+        const resizeHandle = document.getElementById('resize-handle');
+        const fileBrowser = document.getElementById('pluto-file-browser');
+        
+        if (!resizeHandle || !fileBrowser) return;
+        
+        let isResizing = false;
+        let startX = 0;
+        let startWidth = 0;
+        
+        // Store width in localStorage for persistence
+        const savedWidth = localStorage.getItem('pluto-file-browser-width');
+        if (savedWidth) {
+            fileBrowser.style.width = savedWidth + 'px';
+        }
+        
+        resizeHandle.addEventListener('mousedown', (e) => {
+            isResizing = true;
+            startX = e.clientX;
+            startWidth = parseInt(getComputedStyle(fileBrowser).width, 10);
+            
+            // Add visual feedback
+            document.body.style.cursor = 'col-resize';
+            document.body.style.userSelect = 'none';
+            
+            // Prevent text selection during resize
+            e.preventDefault();
+        });
+        
+        document.addEventListener('mousemove', (e) => {
+            if (!isResizing) return;
+            
+            const width = startWidth + e.clientX - startX;
+            const minWidth = 200;
+            const maxWidth = Math.min(600, window.innerWidth * 0.5);
+            
+            const constrainedWidth = Math.max(minWidth, Math.min(maxWidth, width));
+            
+            fileBrowser.style.width = constrainedWidth + 'px';
+            
+            // Update CSS custom property for potential use elsewhere
+            document.documentElement.style.setProperty('--file-browser-width', constrainedWidth + 'px');
+        });
+        
+        document.addEventListener('mouseup', () => {
+            if (isResizing) {
+                isResizing = false;
+                
+                // Remove visual feedback
+                document.body.style.cursor = '';
+                document.body.style.userSelect = '';
+                
+                // Save width to localStorage
+                const currentWidth = parseInt(getComputedStyle(fileBrowser).width, 10);
+                localStorage.setItem('pluto-file-browser-width', currentWidth);
+            }
+        });
+        
+        // Handle double-click to reset to default width
+        resizeHandle.addEventListener('dblclick', () => {
+            const defaultWidth = 300;
+            fileBrowser.style.width = defaultWidth + 'px';
+            localStorage.setItem('pluto-file-browser-width', defaultWidth);
+            document.documentElement.style.setProperty('--file-browser-width', defaultWidth + 'px');
+        });
+    }
     
     async initialize() {
         try {
@@ -69,6 +136,7 @@ class PlutoFileBrowser {
         this.setupToolbarButtons();
         this.setupContextMenus();
         this.setupPopupDialogs();
+        this.setupResizeHandle();
         
         // Search functionality
         const searchInput = document.getElementById('searchInput');

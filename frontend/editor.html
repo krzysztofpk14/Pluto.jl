@@ -21,7 +21,7 @@
     <script defer>
         console.log(
             "Pluto.jl, by Fons van der Plas (https://github.com/fonsp), Mikołaj Bochenski (https://github.com/malyvsen), Michiel Dral (https://github.com/dralletje) and friends 🌈 \n" + 
-            "Pluto.jl notebooks modified by finQbit team (https://github.com/finqbit) f(Q)"
+            "Pluto.jl notebooks modified by finQbit team (https://github.com/finqbit) ⚛️"
         )
     </script>
 
@@ -57,7 +57,7 @@
     <!-- Top Navigation Bar -->
     <div class="pluto-top-nav">
         <div class="pluto-logo">
-            <img id="finqbit-logo-img" src="./img/finQbit_logo.png" alt="finQbit" />
+            <img id="finqbit-logo-img" src="./img/finQbit_logo.svg" alt="finQbit" />
             <span class="pluto-title">Pluto Notebooks</span>
         </div>
         <div class="pluto-nav-controls">
@@ -73,7 +73,7 @@
         <!-- File Browser Sidebar -->
         <div class="pluto-file-browser" id="pluto-file-browser">
             <div class="file-browser-header">
-                <h3>Notebooks</h3>
+                <!-- <h3>Notebooks</h3> -->
                 <div class="file-browser-toolbar">
                     <button class="toolbar-button plus" id="new-notebook-btn" title="New Notebook">
                         <i class="fas fa-plus"></i>
@@ -104,6 +104,9 @@
             <button class="file-browser-toggle" id="file-browser-toggle">
                 <i class="fas fa-bars"></i>
             </button>
+            
+            <!-- Resize handle -->
+            <div class="resize-handle" id="resize-handle"></div>
         </div>
 
         <!-- Editor Content -->

@@ -1,3 +1,8 @@
+/* Ensure finQbit logo is not affected by dark theme filters */
+#finqbit-logo-img {
+    filter: none !important;
+}
+
 /* Top Navigation Bar */
 .pluto-top-nav {
     position: fixed;
@@ -22,8 +27,8 @@
 }
 
 .pluto-logo img {
-    height: 40px;
-    filter: var(--image-filters, none);
+    height: 60px;
+    filter: none !important;
 }
 
 .pluto-title {
@@ -52,30 +57,83 @@
     background-color: #e67600;
 }
 
-/* Main Container */
+/* Main Container with flexible layout */
 .pluto-main-container {
     display: flex;
     height: 100vh;
     padding-top: 60px; /* Account for fixed top nav */
+    overflow: hidden;
 }
 
-/* File Browser Sidebar */
+/* File Browser Sidebar with resizable width */
 .pluto-file-browser {
-    width: 300px;
-    min-width: 250px;
-    max-width: 400px;
+    position: relative;
+    width: 300px; /* Default width */
+    min-width: 250px; /* Minimum width */
+    max-width: 500px; /* Maximum width */
     background-color: var(--main-bg-color, #f5f5f5);
     border-right: 1px solid var(--header-border-color, #ddd);
     display: flex;
     flex-direction: column;
     overflow: hidden;
-    position: relative;
+    flex-shrink: 0; /* Prevent shrinking when resizing */
 }
 
+/* Dark theme for file browser */
+@media (prefers-color-scheme: dark) {
+    .pluto-file-browser {
+        background-color: var(--main-bg-color, #2a2928);
+        border-right-color: var(--header-border-color, #555);
+    }
+}
+
+/* Resize handle */
+.resize-handle {
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 6px;
+    height: 100%;
+    background: transparent;
+    cursor: col-resize;
+    z-index: 1000;
+    transition: background-color 0.2s ease;
+}
+
+.resize-handle:hover {
+    background: linear-gradient(90deg, transparent, rgba(0, 187, 212, 0.3), transparent);
+}
+
+.resize-handle:active {
+    background: rgba(0, 187, 212, 0.5);
+}
+
+/* Visual indicator when resizing */
+.resize-handle::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 3px;
+    height: 30px;
+    background: var(--header-border-color, #ddd);
+    border-radius: 2px;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+}
+
+.resize-handle:hover::after {
+    opacity: 0.6;
+    background: #00bbd4;
+}
+
+/* File Browser Header */
 .file-browser-header {
     padding: 15px;
     border-bottom: 1px solid var(--header-border-color, #ddd);
     background-color: var(--header-bg-color, #fafafa);
+    flex-shrink: 0;
 }
 
 .file-browser-header h3 {
@@ -85,6 +143,7 @@
     font-family: "Vollkorn", Palatino, Georgia, serif;
 }
 
+/* File Browser Toolbar */
 .file-browser-toolbar {
     display: flex;
     gap: 4px;
@@ -119,6 +178,7 @@
 .search-bar {
     padding: 10px 15px;
     border-bottom: 1px solid var(--header-border-color, #eee);
+    flex-shrink: 0;
 }
 
 .search-bar input {
@@ -137,7 +197,7 @@
     box-shadow: 0 0 0 2px rgba(0, 187, 212, 0.2);
 }
 
-/* File Tree */
+/* File Tree Container */
 .file-tree-container {
     flex: 1;
     overflow-y: auto;
@@ -164,6 +224,7 @@
     transition: background-color 0.2s ease;
     font-size: 0.9rem;
     color: var(--pluto-output-color, #333);
+    position: relative;
 }
 
 .file-tree-container li:hover {
@@ -189,11 +250,38 @@
     color: #9c27b0;
 }
 
+/* Status indicators */
+.status-indicator {
+    margin-left: auto;
+    font-size: 12px;
+    font-weight: bold;
+}
+
+.status-ready {
+    color: #4CAF50;
+}
+
+.status-starting {
+    color: #FF9800;
+}
+
+.status-error {
+    color: #F44336;
+}
+
+.temp-indicator {
+    color: #999;
+    font-size: 11px;
+    font-style: italic;
+    margin-left: 4px;
+}
+
+/* Hidden class for collapsible folders */
 .hidden {
     display: none !important;
 }
 
-/* Editor Container */
+/* Editor Container takes remaining space */
 .pluto-editor-container {
     flex: 1;
     display: flex;
@@ -204,7 +292,7 @@
 
 /* Context Menus */
 .context-menu {
-    position: absolute;
+    position: fixed;
     z-index: 2000;
     width: 200px;
     background: var(--pluto-output-bg-color, white);
@@ -352,11 +440,17 @@
         display: none;
     }
     
+    .pluto-main-container {
+        flex-direction: column;
+    }
+    
     .pluto-file-browser {
         position: fixed;
         left: -300px;
         top: 60px;
         height: calc(100vh - 60px);
+        width: 300px;
+        max-width: none;
         z-index: 1500;
         transition: left 0.3s ease;
         box-shadow: 2px 0 10px rgba(0, 0, 0, 0.1);
@@ -366,12 +460,17 @@
         left: 0;
     }
     
+    .resize-handle {
+        display: none;
+    }
+    
     .file-browser-toggle {
         display: block;
     }
     
     .pluto-editor-container {
         width: 100%;
+        flex: 1;
     }
     
     .popup-content {
@@ -392,6 +491,13 @@
     .toolbar-button {
         flex: 1;
         padding: 8px 4px;
+    }
+}
+
+/* Desktop - hide mobile toggle */
+@media (min-width: 769px) {
+    .file-browser-toggle {
+        display: none;
     }
 }
 
@@ -430,4 +536,33 @@ pluto-editor {
     display: flex;
     flex-direction: column;
     height: 100%;
+}
+
+/* Visual feedback for resizing */
+body.resizing {
+    cursor: col-resize !important;
+    user-select: none !important;
+}
+
+body.resizing * {
+    cursor: col-resize !important;
+    user-select: none !important;
+}
+
+/* Improved resize handle visibility */
+.resize-handle::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 2px;
+    width: 2px;
+    height: 100%;
+    background: transparent;
+    border-radius: 1px;
+    transition: background-color 0.2s ease;
+}
+
+.resize-handle:hover::before {
+    background: #00bbd4;
+    opacity: 0.7;
 }

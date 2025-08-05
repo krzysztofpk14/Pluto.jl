@@ -1,3 +1,5 @@
+using JSON
+
 
 function http_router_for(session::ServerSession)
     router = HTTP.Router(default_404_response)
@@ -339,6 +341,125 @@ function http_router_for(session::ServerSession)
         id = UUID(query["id"])
         session.notebooks[id]
     end
+    
+    # New route to return all notebooks in user's folder as JSON
+    function serve_user_notebooks_json(request::HTTP.Request)
+        user = user_from_context(request)
+        if user === nothing
+            return HTTP.Response(401, JSON.json(Dict("error" => "Authentication required")))
+        end
+        
+        try
+            # Get user's notebooks directory
+            user_notebooks_dir = joinpath(user.home_directory, "notebooks")
+            
+            if !isdir(user_notebooks_dir)
+                return HTTP.Response(200, JSON.json(Dict(
+                    "notebooks" => [],
+                    "user" => user.username,
+                    "message" => "Notebooks directory not found"
+                )))
+            end
+            
+            notebooks = []
+            
+            # Recursively find all .jl files in the notebooks directory
+            function scan_directory(dir_path, relative_path="")
+                for item in readdir(dir_path, join=false)
+                    item_path = joinpath(dir_path, item)
+                    item_relative = isempty(relative_path) ? item : joinpath(relative_path, item)
+                    
+                    if isdir(item_path)
+                        # Recursively scan subdirectories
+                        scan_directory(item_path, item_relative)
+                    elseif isfile(item_path) && endswith(lowercase(item), ".jl")
+                        # Check if it's a Pluto notebook by looking for the header
+                        try
+                            file_content = read(item_path, String)
+                            if startswith(file_content, "### A Pluto.jl notebook ###")
+                                # Try to find existing notebook in session
+                                existing_notebook = nothing
+                                notebook_id = nothing
+                                process_status = "not_running"
+                                
+                                # Search for this notebook in the current session
+                                for (id, nb) in session.notebooks
+                                    if nb.path == item_path
+                                        existing_notebook = nb
+                                        notebook_id = string(id)
+                                        process_status = "running"
+                                        break
+                                    end
+                                end
+                                
+                                # # If not found in session, generate a consistent ID based on file path
+                                # if notebook_id === nothing
+                                #     notebook_id = string(hash(item_path))
+                                # end
+                                
+                                # Get file info
+                                file_stat = stat(item_path)
+                                
+                                push!(notebooks, Dict(
+                                    "notebook_id" => notebook_id,
+                                    "name" => item,
+                                    "shortpath" => item_relative,
+                                    "process_status" => process_status,
+                                    "in_temp_dir" => false, # User files are not in temp
+                                    "size" => file_stat.size,
+                                    "modified" => string(Dates.unix2datetime(file_stat.mtime)),
+                                    "is_running" => existing_notebook !== nothing
+                                ))
+                            end
+                        catch e
+                            @warn "Error reading file $item_path: $e"
+                            # Still add it as a potential notebook file
+                            push!(notebooks, Dict(
+                                "notebook_id" => nothing,
+                                "name" => item,
+                                "shortpath" => item_relative,
+                                "process_status" => "unknown",
+                                "in_temp_dir" => false,
+                                "size" => 0,
+                                "modified" => "",
+                                "is_running" => false,
+                                "error" => "Could not read file"
+                            ))
+                        end
+                    end
+                end
+            end
+            
+            # Scan the user's notebooks directory
+            scan_directory(user_notebooks_dir)
+            
+            # Sort notebooks by name
+            sort!(notebooks, by = nb -> nb["name"])
+            
+            response_data = Dict(
+                "notebooks" => notebooks,
+                "user" => user.username,
+                "count" => length(notebooks),
+                "timestamp" => string(now())
+            )
+            
+            response = HTTP.Response(200, JSON.json(response_data))
+            HTTP.setheader(response, "Content-Type" => "application/json; charset=utf-8")
+            return response
+            
+        catch e
+            @error "Error scanning user notebooks directory" exception = (e, catch_backtrace())
+            error_response = Dict(
+                "error" => "Failed to scan notebooks directory",
+                "message" => string(e),
+                "user" => user.username
+            )
+            response = HTTP.Response(500, JSON.json(error_response))
+            HTTP.setheader(response, "Content-Type" => "application/json; charset=utf-8")
+            return response
+        end
+    end
+    HTTP.register!(router, "GET", "/api/notebooks", serve_user_notebooks_json)
 
     # Legacy file serving routes
     function serve_notebookfile(request::HTTP.Request)
