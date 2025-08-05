@@ -8,10 +8,28 @@ import { RawHTMLContainer } from "./components/CellOutput.js"
 import { ProcessStatus } from "./common/ProcessStatus.js"
 import { parse_launch_params } from "./common/parse_launch_params.js"
 
+// Add to the top of editor.js after existing imports
+import "./file-browser.js"
+
 const url_params = new URLSearchParams(window.location.search)
 
 //////////////
 // utils:
+
+// Add this function to handle file browser integration
+const integrateWithFileBrowser = () => {
+    // Ensure file browser is initialized
+    if (window.plutoFileBrowser && window.plutoFileBrowser.isInitialized) {
+        // File browser is ready
+        console.log('File browser integrated with editor');
+    } else {
+        // Wait for file browser to initialize
+        setTimeout(integrateWithFileBrowser, 100);
+    }
+}
+
+// Call integration after a short delay to ensure everything is loaded
+setTimeout(integrateWithFileBrowser, 500);
 
 const set_attribute_if_needed = (element, attr, value) => {
     if (element.getAttribute(attr) !== value) {

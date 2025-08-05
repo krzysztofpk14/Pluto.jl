@@ -900,6 +900,8 @@ all patches: ${JSON.stringify(patches, null, 1)}
             window.version_info = this.client.version_info // for debugging
             // @ts-ignore
             window.kill_socket = this.client.kill // for debugging
+            // @ts-ignore
+            window.pluto_client = this.client //for file-browser.js
 
             if (!client.notebook_exists) {
                 console.error("Notebook does not exist. Not connecting.")

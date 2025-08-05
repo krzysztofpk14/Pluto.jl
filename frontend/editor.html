@@ -16,10 +16,12 @@
     <link rel="icon" type="image/png" sizes="96x96" href="./img/favicon-96x96.png" />
     <link rel="pluto-external-source" id="pluto-logo-big" href="./img/logo.svg" />
     <link rel="pluto-external-source" id="pluto-logo-small" href="./img/favicon_unsaturated.svg" />
+    <link rel="pluto-external-source" id="finqbit-logo" href="./img/finQbit_logo.png" />
 
     <script defer>
         console.log(
-            "Pluto.jl, by Fons van der Plas (https://github.com/fonsp), Mikołaj Bochenski (https://github.com/malyvsen), Michiel Dral (https://github.com/dralletje) and friends 🌈"
+            "Pluto.jl, by Fons van der Plas (https://github.com/fonsp), Mikołaj Bochenski (https://github.com/malyvsen), Michiel Dral (https://github.com/dralletje) and friends 🌈 \n" + 
+            "Pluto.jl notebooks modified by finQbit team (https://github.com/finqbit) f(Q)"
         )
     </script>
 
@@ -31,13 +33,18 @@
     <link rel="pluto-external-source" id="help_circle_icon" href="https://cdn.jsdelivr.net/gh/ionic-team/ionicons@5.5.1/src/svg/help-circle-outline.svg">
     <link rel="pluto-external-source" id="open_icon" href="https://cdn.jsdelivr.net/gh/ionic-team/ionicons@5.5.1/src/svg/open-outline.svg">
 
+    <!-- Font Awesome for file browser icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+
     <!-- This doesn't do anything unless activated, and it makes sure parcel bundles this -->
     <script id="iframe-resizer-content-window-script" src="https://cdn.jsdelivr.net/npm/iframe-resizer@4.3.11/js/iframeResizer.contentWindow.min.js" crossorigin="anonymous" defer></script>
 
     <link rel="stylesheet" href="./all-styles.css" type="text/css" />
+    <link rel="stylesheet" href="./file-browser.css" type="text/css" />
 
     <meta name="pluto-insertion-spot-parameters">
     <script src="./editor.js" type="module" defer></script>
+    <script src="./file-browser.js" type="module" defer></script>
     <script src="./warn_old_browsers.js"></script>
 
     <!-- This script will be enabled by JS after the notebook has initialized to prevent taking up bandwidth during the initial load. -->
@@ -47,11 +54,130 @@
 </head>
 
 <body class="no-MαθJax">
-    <div style="display: flex; min-height: 100vh;">
-        <pluto-editor class="loading fullscreen">
-            <progress style="filter: grayscale(1)" class="statefile-fetch-progress delete-me-when-live" max="100"></progress>
-        </pluto-editor>
+    <!-- Top Navigation Bar -->
+    <div class="pluto-top-nav">
+        <div class="pluto-logo">
+            <img id="finqbit-logo-img" src="./img/finQbit_logo.png" alt="finQbit" />
+            <span class="pluto-title">Pluto Notebooks</span>
+        </div>
+        <div class="pluto-nav-controls">
+            <button class="pluto-logout-button" id="logout-btn">
+                <i class="fas fa-sign-out-alt"></i>
+                Logout
+            </button>
+        </div>
     </div>
+
+    <!-- Main Content Area -->
+    <div class="pluto-main-container">
+        <!-- File Browser Sidebar -->
+        <div class="pluto-file-browser" id="pluto-file-browser">
+            <div class="file-browser-header">
+                <h3>Notebooks</h3>
+                <div class="file-browser-toolbar">
+                    <button class="toolbar-button plus" id="new-notebook-btn" title="New Notebook">
+                        <i class="fas fa-plus"></i>
+                    </button>
+                    <button class="toolbar-button new-folder" id="new-folder-btn" title="New Folder">
+                        <i class="fas fa-folder-plus"></i>
+                    </button>
+                    <button class="toolbar-button upload" id="upload-btn" title="Upload">
+                        <i class="fas fa-upload"></i>
+                    </button>
+                    <button class="toolbar-button refresh" id="refresh-btn" title="Refresh">
+                        <i class="fas fa-refresh"></i>
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Search bar -->
+            <div class="search-bar"> 
+                <input type="text" id="searchInput" placeholder="Filter files by name">
+            </div>
+            
+            <!-- File tree -->
+            <div class="file-tree-container">
+                <ul id="directoryTree"></ul>
+            </div>
+
+            <!-- Toggle button for mobile -->
+            <button class="file-browser-toggle" id="file-browser-toggle">
+                <i class="fas fa-bars"></i>
+            </button>
+        </div>
+
+        <!-- Editor Content -->
+        <div class="pluto-editor-container">
+            <pluto-editor class="loading fullscreen">
+                <progress style="filter: grayscale(1)" class="statefile-fetch-progress delete-me-when-live" max="100"></progress>
+            </pluto-editor>
+        </div>
+    </div>
+
+    <!-- Context Menus -->
+    <div id="fileContextMenu" class="context-menu">
+        <div class="context-menu-item open"><i class="fas fa-folder-open"></i>Open</div>
+        <div class="context-menu-item shutdown"><i class="fas fa-stop-circle"></i>Shutdown Notebook</div>
+        <div class="context-menu-item rename"><i class="fas fa-edit"></i>Rename</div>
+        <div class="context-menu-item delete"><i class="fas fa-trash-alt"></i>Delete</div>
+        <div class="context-menu-item download"><i class="fas fa-download"></i>Download</div>
+    </div>
+
+    <div id="folderContextMenu" class="context-menu">
+        <div class="context-menu-item folder-new-file"><i class="fas fa-file"></i>New File</div>
+        <div class="context-menu-item folder-new-folder"><i class="fas fa-folder-plus"></i>New Folder</div>
+        <div class="context-menu-item folder-rename"><i class="fas fa-edit"></i>Rename Folder</div>
+        <div class="context-menu-item folder-delete"><i class="fas fa-trash-alt"></i>Delete Folder</div>
+    </div>
+
+    <!-- Popup Dialogs -->
+    <div id="newFilePopup" class="popup-dialog">
+        <div class="popup-content">
+            <h3>Create New Notebook</h3>
+            <label for="newFileName">Enter notebook name:</label>
+            <input type="text" id="newFileName" placeholder="NewNotebook.jl">
+            <div class="popup-buttons">
+                <button class="btn btn-primary" id="createFileButton">Create</button>
+                <button class="btn btn-secondary" id="cancelFileButton">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="newFolderPopup" class="popup-dialog">
+        <div class="popup-content">
+            <h3>Create New Folder</h3>
+            <label for="newFolderName">Enter folder name:</label>
+            <input type="text" id="newFolderName" placeholder="NewFolder">
+            <div class="popup-buttons">
+                <button class="btn btn-primary" id="createFolderButton">Create</button>
+                <button class="btn btn-secondary" id="cancelFolderButton">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="renameFilePopup" class="popup-dialog">
+        <div class="popup-content">
+            <h3>Rename File</h3>
+            <label for="renameFileName">Enter new name:</label>
+            <input type="text" id="renameFileName" placeholder="RenamedNotebook.jl">
+            <div class="popup-buttons">
+                <button class="btn btn-primary" id="renameFileButton">Rename</button>
+                <button class="btn btn-secondary" id="cancelRenameFileButton">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Upload Form -->
+    <form id="uploadFileForm" class="popup-dialog" enctype="multipart/form-data">
+        <div class="popup-content">
+            <h3>Upload Notebook</h3>
+            <input type="file" name="notebook_file" accept=".jl,.pluto" />
+            <div class="popup-buttons">
+                <input type="submit" value="Upload" class="btn btn-primary" />
+                <button type="button" class="btn btn-secondary" id="cancelUploadButton">Cancel</button>
+            </div>
+        </div>
+    </form>
 </body>
 
 </html>
