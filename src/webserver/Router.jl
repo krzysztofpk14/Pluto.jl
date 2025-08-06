@@ -94,10 +94,54 @@ function http_router_for(session::ServerSession)
     
     # Logout route
     function serve_logout(request::HTTP.Request)
-        response = HTTP.Response(302)
-        HTTP.setheader(response, "Location" => "./login")
-        HTTP.setheader(response, "Set-Cookie" => "pluto_user_session=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT")
-        response
+        # response = HTTP.Response(302)
+        # HTTP.setheader(response, "Location" => "./login")
+        # HTTP.setheader(response, "Set-Cookie" => "pluto_user_session=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT")
+        # response
+        try
+            @info "Processing logout request"
+            
+            # Get user from current session
+            user = user_from_context(request)
+            if user !== nothing
+                @info "Logging out user: $(user.username)"
+                
+                # Shutdown all notebooks belonging to this user
+                user_notebooks = get_user_notebooks(session, user.id)
+                @info "Found $(length(user_notebooks)) notebooks to shutdown for user: $(user.username)"
+                
+                for notebook in user_notebooks
+                    try
+                        @info "Shutting down notebook: $(notebook.notebook_id) - $(basename(notebook.path))"
+                        SessionActions.shutdown(session, notebook; keep_in_session=false, async=false, verbose=true)
+                        remove_notebook_from_user(session, user.id, notebook.notebook_id)
+                    catch e
+                        @warn "Failed to shutdown notebook $(notebook.notebook_id): $e"
+                    end
+                end
+                
+                @info "All notebooks shutdown for user: $(user.username)"
+                
+                # Clear user session data (optional additional function)
+                # clear_user_session_data(user)
+            end
+            
+            # Create logout response with cleared cookies
+            response = HTTP.Response(302)
+            HTTP.setheader(response, "Location" => "./login")
+            HTTP.setheader(response, "Set-Cookie" => "pluto_user_session=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; HttpOnly; SameSite=Strict")
+            
+            @info "Logout completed successfully"
+            return response
+            
+        catch e
+            @error "Logout failed:" exception=(e, catch_backtrace())
+            # Even if logout fails, still clear the session cookie
+            response = HTTP.Response(302)
+            HTTP.setheader(response, "Location" => "./login?error=logout_failed")
+            HTTP.setheader(response, "Set-Cookie" => "pluto_user_session=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT")
+            return response
+        end
     end
     HTTP.register!(router, "GET", "/logout", serve_logout)
     HTTP.register!(router, "POST", "/logout", serve_logout)

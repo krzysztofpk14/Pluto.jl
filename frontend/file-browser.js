@@ -131,6 +131,7 @@ class PlutoFileBrowser {
         this.setupContextMenus();
         this.setupPopupDialogs();
         this.setupResizeHandle();
+        this.setupLogoutButton();
         
         // Search functionality
         const searchInput = document.getElementById('searchInput');
@@ -860,6 +861,71 @@ class PlutoFileBrowser {
         // TODO: Implement folder deletion API
         alert('Folder deletion not implemented yet');
         this.hideAllContextMenus();
+    }
+
+    // Logout
+    setupLogoutButton() {
+        const logoutBtn = document.getElementById('logout-btn');
+        if (logoutBtn) {
+            logoutBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                this.handleLogout();
+            });
+        }
+    }
+
+    async handleLogout() {
+        // Show confirmation dialog
+        if (!confirm('Are you sure you want to logout? Any unsaved changes may be lost.')) {
+            return;
+        }
+        
+        try {
+            // Show loading state
+            const logoutBtn = document.getElementById('logout-btn');
+            const originalContent = logoutBtn.innerHTML;
+            logoutBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Logging out...';
+            logoutBtn.disabled = true;
+            
+            // Call logout endpoint
+            const response = await fetch('/logout', {
+                method: 'POST',
+                credentials: 'include',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json'
+                }
+            });
+            
+            if (response.ok) {
+                // Clear any stored session data
+                localStorage.removeItem('pluto-file-browser-width');
+                localStorage.removeItem('pluto-session-id');
+                sessionStorage.clear();
+                
+                // Show success message briefly
+                logoutBtn.innerHTML = '<i class="fas fa-check"></i> Logged out';
+                
+                // Redirect to login page or home
+                setTimeout(() => {
+                    window.location.href = '/login';
+                }, 1000);
+                
+            } else {
+                throw new Error(`Logout failed: ${response.status} ${response.statusText}`);
+            }
+            
+        } catch (error) {
+            console.error('Logout failed:', error);
+            
+            // Reset button state
+            const logoutBtn = document.getElementById('logout-btn');
+            logoutBtn.innerHTML = '<i class="fas fa-sign-out-alt"></i> Logout';
+            logoutBtn.disabled = false;
+            
+            // Show error message
+            alert('Logout failed: ' + error.message);
+        }
     }
 
     // Debug methods
