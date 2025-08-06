@@ -182,8 +182,11 @@ function http_router_for(session::ServerSession)
         if user === nothing
             return HTTP.Response(403, "Authentication required")
         end
-
-        @info user.home_directory
+        
+        uri = HTTP.URI(request.target)
+        query = HTTP.queryparams(uri)
+        file_name = get(query, "name", nothing)
+        @info "File name: $file_name"
 
         # Set user-specific notebook directory
         original_notebook_dir = session.options.server.notebook
@@ -191,7 +194,7 @@ function http_router_for(session::ServerSession)
         
         try
             result = with_user_working_directory(user, () -> begin
-                nb = SessionActions.new(session)
+                nb = SessionActions.new(session, filename_base=file_name)
                 add_notebook_to_user(session, user.id, nb.notebook_id)
                 return notebook_response(nb; as_redirect=(request.method == "GET"))
         end)

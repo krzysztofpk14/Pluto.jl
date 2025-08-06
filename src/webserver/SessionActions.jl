@@ -219,9 +219,21 @@ function save_upload(contents::Union{String,Vector{UInt8}}; filename_base::Union
 end
 
 "Create a new empty notebook inside `session::ServerSession`. Returns the `Notebook`."
-function new(session::ServerSession; run_async=true, notebook_id::UUID=uuid1())
+function new(session::ServerSession; run_async=true, notebook_id::UUID=uuid1(), filename_base::Union{Nothing,AbstractString}=nothing)
+    cleaned_filename_base = if filename_base !== nothing
+        endswith(lowercase(filename_base), ".jl") ? filename_base[1:end-3] : filename_base
+    else
+        nothing
+    end
+
+    save_path = numbered_until_new(
+        joinpath(
+            new_notebooks_directory(),
+            something(cleaned_filename_base, cutename())
+        ); suffix=".jl")
+
     notebook = if session.options.compiler.sysimage === nothing
-        emptynotebook()
+        emptynotebook(save_path, uuid1())
     else
         Notebook([Cell("import Pkg"), Cell("# This cell disables Pluto's package manager and activates the global environment. Click on ? inside the bubble next to Pkg.activate to learn more.\n# (added automatically because a sysimage is used)\nPkg.activate()"), Cell()])
     end
