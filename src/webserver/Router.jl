@@ -534,18 +534,20 @@ function http_router_for(session::ServerSession)
             return HTTP.Response(403, "Authentication required")
         end
         
+        @info "Handling notebook upload for user: $(user.username)"
         uri = HTTP.URI(request.target)
+        @info uri
         query = HTTP.queryparams(uri)
-        
-        # Save upload to user's directory
-        user_upload_dir = joinpath(user.home_directory, "uploads")
-        mkpath(user_upload_dir)
-        
-        save_path = SessionActions.save_upload(request.body; 
-            filename_base=get(query, "name", nothing),
-            upload_dir=user_upload_dir
-        )
-        
+        @info "Query parameters: $(query)"
+
+        save_path = with_user_working_directory(user, () -> begin 
+            return SessionActions.save_upload(request.body; 
+                filename_base=get(query, "name", nothing)
+            )
+        end
+        ) 
+        @info "File saved to: $save_path"
+
         try
             nb = SessionActions.open(session, save_path;
                 execution_allowed=haskey(query, "execution_allowed"),

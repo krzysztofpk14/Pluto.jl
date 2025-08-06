@@ -202,10 +202,17 @@ save_upload(some_notebook_data; filename_base="hello") == "~/.julia/pluto_notebo
 ```
 """
 function save_upload(contents::Union{String,Vector{UInt8}}; filename_base::Union{Nothing,AbstractString}=nothing)
+    # Strip .jl extension if present to avoid duplicate suffixes
+    cleaned_filename_base = if filename_base !== nothing
+        endswith(lowercase(filename_base), ".jl") ? filename_base[1:end-3] : filename_base
+    else
+        nothing
+    end
+
     save_path = numbered_until_new(
         joinpath(
-            new_notebooks_directory(), 
-            something(filename_base, cutename())
+            new_notebooks_directory(),
+            something(cleaned_filename_base, cutename())
         ); suffix=".jl")
     write(save_path, contents)
     save_path

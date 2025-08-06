@@ -130,18 +130,12 @@
 
 /* File Browser Header */
 .file-browser-header {
-    padding: 15px;
+    padding: 16px 15px;
     border-bottom: 1px solid var(--header-border-color, #ddd);
     background-color: var(--header-bg-color, #fafafa);
     flex-shrink: 0;
 }
 
-.file-browser-header h3 {
-    margin: 0 0 10px 0;
-    font-size: 1.1rem;
-    color: var(--pluto-output-h-color, #333);
-    font-family: "Vollkorn", Palatino, Georgia, serif;
-}
 
 /* File Browser Toolbar */
 .file-browser-toolbar {
@@ -202,6 +196,7 @@
     flex: 1;
     overflow-y: auto;
     padding: 10px;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
 }
 
 .file-tree-container ul {
@@ -215,16 +210,19 @@
 }
 
 .file-tree-container li {
-    margin: 2px 0;
+    margin: 3px 0;
     cursor: pointer;
     display: flex;
     align-items: center;
-    padding: 4px 8px;
-    border-radius: 4px;
+    padding: 6px 10px;
+    border-radius: 6px;
     transition: background-color 0.2s ease;
-    font-size: 0.9rem;
+    font-size: 14px;
+    font-weight: 400;
+    line-height: 1.4;
     color: var(--pluto-output-color, #333);
     position: relative;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
 }
 
 .file-tree-container li:hover {
@@ -232,22 +230,38 @@
 }
 
 .file-tree-container li i {
-    margin-right: 8px;
-    width: 16px;
+    margin-right: 10px;
+    width: 18px;
     text-align: center;
-    font-size: 0.9rem;
+    font-size: 14px;
+    flex-shrink: 0;
+}
+
+/* Folder styling */
+.file-tree-container li.folder {
+    font-weight: 500;
+    color: var(--pluto-output-color, #2c3e50);
 }
 
 .file-tree-container li.folder > i {
     color: #ffa726;
+    font-size: 15px;
+}
+
+/* File styling */
+.file-tree-container li.file {
+    font-weight: 400;
+    color: var(--pluto-output-color, #34495e);
 }
 
 .file-tree-container li.file > i {
     color: #42a5f5;
+    font-size: 14px;
 }
 
 .file-tree-container li.file[data-name$=".jl"] > i {
     color: #9c27b0;
+    font-size: 14px;
 }
 
 /* Status indicators */
@@ -267,6 +281,16 @@
 
 .status-error {
     color: #F44336;
+}
+
+.size-indicator {
+    color: #7f8c8d;
+    font-size: 12px;
+    font-weight: 400;
+    margin-left: 2px;
+    font-family: "SF Mono", "Monaco", "Inconsolata", "Fira Code", "Droid Sans Mono", "Source Code Pro", monospace;
+    opacity: 0.8;
+    flex-shrink: 0;
 }
 
 .temp-indicator {
@@ -294,29 +318,32 @@
 .context-menu {
     position: fixed;
     z-index: 2000;
-    width: 200px;
+    min-width: 180px;
     background: var(--pluto-output-bg-color, white);
     border: 1px solid var(--header-border-color, #ddd);
     box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
     display: none;
-    padding: 4px 0;
-    border-radius: 6px;
-    font-size: 0.9rem;
+    padding: 6px 0;
+    border-radius: 8px;
+    font-size: 14px;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
 }
 
 .context-menu-item {
-    padding: 8px 16px;
+    padding: 10px 16px;
     cursor: pointer;
     display: flex;
     align-items: center;
-    color: var(--pluto-output-color, #333);
+    color: var(--pluto-output-color, #2c3e50);
     transition: background-color 0.2s ease;
+    font-weight: 400;
 }
 
 .context-menu-item i {
-    margin-right: 10px;
+    margin-right: 12px;
     width: 16px;
     text-align: center;
+    font-size: 14px;
 }
 
 .context-menu-item:hover {
@@ -335,10 +362,11 @@
     z-index: 3000;
     align-items: center;
     justify-content: center;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
 }
 
 .popup-dialog.show {
-    display: flex;
+    display: flex !important;;
 }
 
 .popup-content {
@@ -353,7 +381,7 @@
 .popup-content h3 {
     margin: 0 0 16px 0;
     color: var(--pluto-output-h-color, #333);
-    font-family: "Vollkorn", Palatino, Georgia, serif;
+    font-family: var(--roboto-mono-font-stack);
 }
 
 .popup-content label {
@@ -384,7 +412,7 @@
 .popup-buttons {
     display: flex;
     gap: 12px;
-    justify-content: flex-end;
+    justify-content: space-between;
 }
 
 .btn {
