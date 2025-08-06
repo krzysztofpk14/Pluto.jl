@@ -155,7 +155,7 @@ class PlutoFileBrowser {
         
         const newNotebookBtn = document.getElementById('new-notebook-btn');
         if (newNotebookBtn) {
-            newNotebookBtn.addEventListener('click', () => this.createNewNotebook());
+            // newNotebookBtn.addEventListener('click', () => this.createNewNotebook());
         }
     }
     
@@ -191,6 +191,7 @@ class PlutoFileBrowser {
         }
     }
     
+    // Replace the existing setupPopupDialogs method
     setupPopupDialogs() {
         // New File Dialog
         const newFileBtn = document.getElementById('new-notebook-btn');
@@ -198,48 +199,106 @@ class PlutoFileBrowser {
         const createFileBtn = document.getElementById('createFileButton');
         const cancelFileBtn = document.getElementById('cancelFileButton');
         
-        if (newFileBtn && newFilePopup) {
+        // Toolbar button - creates in root
+        if (newFileBtn) {
             newFileBtn.addEventListener('click', () => {
+                console.log('Toolbar new file button clicked');
+                // Reset context for toolbar button (create in root)
+                this.fileCreationContext = { parentPath: '', parentName: 'root' };
+                
+                const dialogTitle = document.querySelector('#newFilePopup h3');
+                if (dialogTitle) {
+                    dialogTitle.textContent = 'Create New Notebook';
+                }
+                
                 this.showPopup('newFilePopup');
-                document.getElementById('newFileName').focus();
-            });
-        }
-        
-        if (createFileBtn) {
-            createFileBtn.addEventListener('click', () => {
-                const fileName = document.getElementById('newFileName').value.trim();
-                if (fileName) {
-                    this.createNewNotebook(fileName); //Resolve Backend Issue
-                    this.hidePopup('newFilePopup');
+                const fileInput = document.getElementById('newFileName');
+                if (fileInput) {
+                    fileInput.focus();
+                    fileInput.value = '';
                 }
             });
         }
         
+        // Create button in dialog
+        if (createFileBtn) {
+            createFileBtn.addEventListener('click', () => {
+                const fileName = document.getElementById('newFileName').value.trim();
+                console.log('Create button clicked with filename:', fileName);
+                console.log('Current file creation context:', this.fileCreationContext);
+                
+                if (fileName) {
+                    this.createNewNotebook(fileName);
+                    this.hidePopup('newFilePopup');
+                } else {
+                    alert('Please enter a file name');
+                }
+            });
+        }
+        
+        // Cancel button in dialog
         if (cancelFileBtn) {
-            cancelFileBtn.addEventListener('click', () => {
+            cancelFileBtn.addEventListener('click', (e) => {
+                e.preventDefault();
                 this.hidePopup('newFilePopup');
+                // Reset context
+                this.fileCreationContext = null;
             });
         }
 
-        // New Folder Dialog
+        // Handle Enter key in filename input
+        const fileNameInput = document.getElementById('newFileName');
+        if (fileNameInput) {
+            fileNameInput.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    const fileName = fileNameInput.value.trim();
+                    if (fileName) {
+                        this.createNewNotebook(fileName);
+                        this.hidePopup('newFilePopup');
+                    }
+                }
+            });
+        }
+
+        // New Folder Dialog - similar pattern
         const newFolderBtn = document.getElementById('new-folder-btn');
         const newFolderPopup = document.getElementById('newFolderPopup');
         const createFolderBtn = document.getElementById('createFolderButton');
         const cancelFolderBtn = document.getElementById('cancelFolderButton');
         
-        if (newFolderBtn && newFolderPopup) {
+        if (newFolderBtn) {
             newFolderBtn.addEventListener('click', () => {
+                console.log('Toolbar new folder button clicked');
+                // Reset context for toolbar button
+                this.folderCreationContext = { parentPath: '', parentName: 'root' };
+                
+                const dialogTitle = document.querySelector('#newFolderPopup h3');
+                if (dialogTitle) {
+                    dialogTitle.textContent = 'Create New Folder';
+                }
+                
                 this.showPopup('newFolderPopup');
-                document.getElementById('newFolderName').focus();
+                const folderInput = document.getElementById('newFolderName');
+                if (folderInput) {
+                    folderInput.focus();
+                    folderInput.value = '';
+                }
             });
         }
         
         if (createFolderBtn) {
             createFolderBtn.addEventListener('click', () => {
                 const folderName = document.getElementById('newFolderName').value.trim();
+                console.log('Create folder button clicked with name:', folderName);
+                console.log('Current folder creation context:', this.folderCreationContext);
+                
                 if (folderName) {
-                    this.createNewFolder(folderName);
-                    this.hidePopup('newFolderPopup');
+                    // Use context if available
+                    const parentPath = this.folderCreationContext?.parentPath || '';
+                    this.createNewFolder(folderName, parentPath);
+                } else {
+                    alert('Please enter a folder name');
                 }
             });
         }
@@ -247,6 +306,23 @@ class PlutoFileBrowser {
         if (cancelFolderBtn) {
             cancelFolderBtn.addEventListener('click', () => {
                 this.hidePopup('newFolderPopup');
+                // Reset context
+                this.folderCreationContext = null;
+            });
+        }
+
+        // Handle Enter key in folder name input
+        const folderNameInput = document.getElementById('newFolderName');
+        if (folderNameInput) {
+            folderNameInput.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    const folderName = folderNameInput.value.trim();
+                    if (folderName) {
+                        const parentPath = this.folderCreationContext?.parentPath || '';
+                        this.createNewFolder(folderName, parentPath);
+                    }
+                }
             });
         }
 
@@ -259,9 +335,7 @@ class PlutoFileBrowser {
             uploadBtn.addEventListener('click', () => {
                 this.showPopup('uploadFileForm');
             });
-        }
-        
-        if (uploadForm) {
+            
             uploadForm.addEventListener('submit', (e) => {
                 e.preventDefault();
                 this.uploadFile(uploadForm);
@@ -317,7 +391,7 @@ class PlutoFileBrowser {
 
     async loadFileTreeViaREST() {
         try {
-            console.log('Loading notebooks via REST API...');
+            console.log('Loading complete directory tree via REST API...');
             
             const response = await fetch('/api/notebooks', {
                 method: 'GET',
@@ -332,17 +406,23 @@ class PlutoFileBrowser {
                 const data = await response.json();
                 console.log('REST API response:', data);
                 
-                if (data.notebooks && Array.isArray(data.notebooks)) {
-                    this.fileTree = this.convertNotebooksToTree(data.notebooks);
+                if (data.tree && data.tree.contents) {
+                    // Use the tree structure directly
+                    this.fileTree = data.tree;
                     this.renderFileTree();
-                    console.log(`Loaded ${data.count} notebooks for user: ${data.user}`);
+                    
+                    console.log(`Loaded directory tree for user: ${data.user}`);
+                    console.log(`Counts:`, data.counts);
+                    
+                    // Update UI status if there's a status element
+                    this.updateStatus(data.counts);
                 } else {
                     console.warn('Invalid response format from /api/notebooks');
                     this.fileTree = this.createEmptyFileTree();
                     this.renderFileTree();
                 }
             } else {
-                console.error('Failed to load notebooks:', response.status, response.statusText);
+                console.error('Failed to load directory tree:', response.status, response.statusText);
                 this.fileTree = this.createEmptyFileTree();
                 this.renderFileTree();
             }
@@ -352,113 +432,122 @@ class PlutoFileBrowser {
             this.renderFileTree();
         }
     }
-    
-    convertNotebooksToTree(notebooks) {
-        console.log('Converting notebooks to tree using shortpath:', notebooks);
-        
-        const tree = {
-            name: 'root',
-            type: 'directory',
-            path: '',
-            contents: []
-        };
-        
-        if (!notebooks || !Array.isArray(notebooks)) {
-            console.warn('Invalid notebooks data:', notebooks);
-            return tree;
+
+    // Add method to update status display
+    updateStatus(counts) {
+        const statusElement = document.getElementById('file-browser-status');
+        if (statusElement && counts) {
+            const statusText = `${counts.folders} folders, ${counts.notebooks} notebooks, ${counts.other_files} other files`;
+            statusElement.textContent = statusText;
         }
-        
-        // Group notebooks by directory using shortpath
-        const pathMap = new Map();
-        
-        notebooks.forEach((notebook) => {
-            // Use shortpath to determine directory structure
-            const shortpath = notebook.shortpath || notebook.name || 'unknown.jl';
-            
-            // Split on both forward and back slashes to handle Windows paths
-            const parts = shortpath.split(/[\/\\]/);
-            const filename = parts.pop() || 'unknown.jl';
-            const dirPath = parts.length > 0 ? parts.join('/') : '';
-            
-            // Group by directory
-            if (!pathMap.has(dirPath)) {
-                pathMap.set(dirPath, []);
-            }
-            
-            pathMap.get(dirPath).push({
-                name: filename,
-                type: 'file',
-                shortpath: shortpath,
-                notebook_id: notebook.notebook_id,
-                process_status: notebook.process_status || 'not_running',
-                in_temp_dir: notebook.in_temp_dir || false,
-                is_running: notebook.is_running || false,
-                size: notebook.size || 0,
-                modified: notebook.modified || '',
-                // Store full notebook data for operations
-                _notebook_data: notebook
-            });
-        });
-        
-        console.log('Path map:', pathMap);
-        
-        // Build tree structure using relative paths
-        pathMap.forEach((files, dirPath) => {
-            if (dirPath === '' || dirPath === '.') {
-                // Files in root directory
-                tree.contents.push(...files);
-            } else {
-                // Files in subdirectories
-                const dirParts = dirPath.split('/').filter(part => part.length > 0);
-                let currentDir = tree;
-                
-                // Create directory structure
-                dirParts.forEach((part, index) => {
-                    let subDir = currentDir.contents.find(item => 
-                        item.type === 'directory' && item.name === part
-                    );
-                    
-                    if (!subDir) {
-                        subDir = {
-                            name: part,
-                            type: 'directory',
-                            path: dirParts.slice(0, index + 1).join('/'),
-                            shortpath: dirParts.slice(0, index + 1).join('/'),
-                            contents: []
-                        };
-                        currentDir.contents.push(subDir);
-                    }
-                    
-                    currentDir = subDir;
-                });
-                
-                // Add files to the deepest directory
-                currentDir.contents.push(...files);
-            }
-        });
-        
-        // Sort contents: directories first, then files, both alphabetically
-        const sortContents = (contents) => {
-            contents.sort((a, b) => {
-                if (a.type !== b.type) {
-                    return a.type === 'directory' ? -1 : 1;
-                }
-                return a.name.localeCompare(b.name);
-            });
-            
-            // Recursively sort subdirectories
-            contents.forEach(item => {
-                if (item.type === 'directory' && item.contents) {
-                    sortContents(item.contents);
-                }
-            });
-        };
-        
-        sortContents(tree.contents);
-        
-        console.log('Built tree structure:', tree);
-        return tree;
     }
+    
+    // convertNotebooksToTree(notebooks) {
+    //     console.log('Converting notebooks to tree using shortpath:', notebooks);
+        
+    //     const tree = {
+    //         name: 'root',
+    //         type: 'directory',
+    //         path: '',
+    //         contents: []
+    //     };
+        
+    //     if (!notebooks || !Array.isArray(notebooks)) {
+    //         console.warn('Invalid notebooks data:', notebooks);
+    //         return tree;
+    //     }
+        
+    //     // Group notebooks by directory using shortpath
+    //     const pathMap = new Map();
+        
+    //     notebooks.forEach((notebook) => {
+    //         // Use shortpath to determine directory structure
+    //         const shortpath = notebook.shortpath || notebook.name || 'unknown.jl';
+            
+    //         // Split on both forward and back slashes to handle Windows paths
+    //         const parts = shortpath.split(/[\/\\]/);
+    //         const filename = parts.pop() || 'unknown.jl';
+    //         const dirPath = parts.length > 0 ? parts.join('/') : '';
+            
+    //         // Group by directory
+    //         if (!pathMap.has(dirPath)) {
+    //             pathMap.set(dirPath, []);
+    //         }
+            
+    //         pathMap.get(dirPath).push({
+    //             name: filename,
+    //             type: 'file',
+    //             shortpath: shortpath,
+    //             notebook_id: notebook.notebook_id,
+    //             process_status: notebook.process_status || 'not_running',
+    //             in_temp_dir: notebook.in_temp_dir || false,
+    //             is_running: notebook.is_running || false,
+    //             size: notebook.size || 0,
+    //             modified: notebook.modified || '',
+    //             // Store full notebook data for operations
+    //             _notebook_data: notebook
+    //         });
+    //     });
+        
+    //     console.log('Path map:', pathMap);
+        
+    //     // Build tree structure using relative paths
+    //     pathMap.forEach((files, dirPath) => {
+    //         if (dirPath === '' || dirPath === '.') {
+    //             // Files in root directory
+    //             tree.contents.push(...files);
+    //         } else {
+    //             // Files in subdirectories
+    //             const dirParts = dirPath.split('/').filter(part => part.length > 0);
+    //             let currentDir = tree;
+                
+    //             // Create directory structure
+    //             dirParts.forEach((part, index) => {
+    //                 let subDir = currentDir.contents.find(item => 
+    //                     item.type === 'directory' && item.name === part
+    //                 );
+                    
+    //                 if (!subDir) {
+    //                     subDir = {
+    //                         name: part,
+    //                         type: 'directory',
+    //                         path: dirParts.slice(0, index + 1).join('/'),
+    //                         shortpath: dirParts.slice(0, index + 1).join('/'),
+    //                         contents: []
+    //                     };
+    //                     currentDir.contents.push(subDir);
+    //                 }
+                    
+    //                 currentDir = subDir;
+    //             });
+                
+    //             // Add files to the deepest directory
+    //             currentDir.contents.push(...files);
+    //         }
+    //     });
+        
+    //     // Sort contents: directories first, then files, both alphabetically
+    //     const sortContents = (contents) => {
+    //         contents.sort((a, b) => {
+    //             if (a.type !== b.type) {
+    //                 return a.type === 'directory' ? -1 : 1;
+    //             }
+    //             return a.name.localeCompare(b.name);
+    //         });
+            
+    //         // Recursively sort subdirectories
+    //         contents.forEach(item => {
+    //             if (item.type === 'directory' && item.contents) {
+    //                 sortContents(item.contents);
+    //             }
+    //         });
+    //     };
+        
+    //     sortContents(tree.contents);
+        
+    //     console.log('Built tree structure:', tree);
+    //     return tree;
+    // }
     
     createMockFileTree() {
         return {
@@ -503,58 +592,110 @@ class PlutoFileBrowser {
     createTreeItem(item, parentElement) {
         const listItem = document.createElement('li');
         listItem.className = item.type === 'directory' ? 'folder' : 'file';
-        listItem.dataset.shortpath = item.shortpath;
+        listItem.dataset.shortpath = item.shortpath || '';
         
         if (item.notebook_id) {
             listItem.dataset.notebookId = item.notebook_id;
         }
         
+        // Set file type class for styling
+        if (item.file_type) {
+            listItem.classList.add(item.file_type);
+        }
+        
         const icon = document.createElement('i');
-        icon.className = item.type === 'directory' ? 'fas fa-folder' : 'fa-solid fa-file';
+        
+        // Choose appropriate icon based on type
+        if (item.type === 'directory') {
+            icon.className = 'fas fa-folder';
+            if (item.is_empty) {
+                listItem.classList.add('empty-folder');
+                listItem.title = 'Empty folder';
+            }
+        } else {
+            // File icons based on file type
+            switch (item.file_type) {
+                case 'pluto_notebook':
+                    icon.className = 'fas fa-book';
+                    icon.style.color = '#9c27b0'; // Purple for Pluto notebooks
+                    break;
+                case 'julia_file':
+                    icon.className = 'fab fa-julia';
+                    icon.style.color = '#389826'; // Julia green for .jl files
+                    break;
+                case 'text_file':
+                    icon.className = 'fas fa-file-alt';
+                    icon.style.color = '#6c757d'; // Gray for text files
+                    break;
+                case 'config_file':
+                    icon.className = 'fas fa-cog';
+                    icon.style.color = '#17a2b8'; // Blue for config files
+                    break;
+                case 'image_file':
+                    icon.className = 'fas fa-image';
+                    icon.style.color = '#28a745'; // Green for images
+                    break;
+                default:
+                    icon.className = 'fas fa-file';
+                    icon.style.color = '#6c757d'; // Default gray
+            }
+        }
         
         listItem.appendChild(icon);
         listItem.appendChild(document.createTextNode(' ' + item.name));
         
-        // Add status indicators for files
-        if (item.type === 'file') {
+        // Add status indicators for Pluto notebooks
+        if (item.type === 'file' && item.is_pluto_notebook) {
             // Running status indicator
             if (item.is_running) {
                 const statusIcon = document.createElement('span');
                 statusIcon.classList.add('status-indicator', 'status-running');
                 statusIcon.title = 'Notebook is running';
                 statusIcon.textContent = ' ●';
-                statusIcon.style.color = '#4CAF50';
+                statusIcon.style.color = '#28a745';
                 listItem.appendChild(statusIcon);
             } else {
                 const statusIcon = document.createElement('span');
                 statusIcon.classList.add('status-indicator', 'status-not-running');
                 statusIcon.title = 'Notebook is not running';
                 statusIcon.textContent = ' ○';
-                statusIcon.style.color = '#999';
+                statusIcon.style.color = '#6c757d';
                 listItem.appendChild(statusIcon);
             }
-            
-            // File size indicator (optional)
-            if (item.size > 0) {
-                const sizeIcon = document.createElement('span');
-                sizeIcon.classList.add('size-indicator');
-                sizeIcon.title = `Size: ${this.formatFileSize(item.size)}`;
-                sizeIcon.textContent = ` (${this.formatFileSize(item.size)})`;
-                sizeIcon.style.color = '#666';
-                sizeIcon.style.fontSize = '0.8em';
-                listItem.appendChild(sizeIcon);
-            }
+        }
+        
+        // File size indicator for all files
+        if (item.type === 'file' && item.size > 0) {
+            const sizeIcon = document.createElement('span');
+            sizeIcon.classList.add('size-indicator');
+            sizeIcon.title = `Size: ${this.formatFileSize(item.size)}`;
+            sizeIcon.textContent = ` (${this.formatFileSize(item.size)})`;
+            sizeIcon.style.color = '#6c757d';
+            sizeIcon.style.fontSize = '0.8em';
+            listItem.appendChild(sizeIcon);
+        }
+        
+        // Empty folder indicator
+        if (item.type === 'directory' && item.is_empty) {
+            const emptyIcon = document.createElement('span');
+            emptyIcon.classList.add('empty-indicator');
+            emptyIcon.title = 'Empty folder';
+            emptyIcon.textContent = '  (empty)';
+            emptyIcon.style.color = '#6c757d';
+            emptyIcon.style.fontSize = '0.8em';
+            emptyIcon.style.fontStyle = 'italic';
+            listItem.appendChild(emptyIcon);
         }
         
         parentElement.appendChild(listItem);
         
         // Handle directory expansion
-        if (item.type === 'directory' && item.contents && item.contents.length > 0) {
+        if (item.type === 'directory') {
             const subList = document.createElement('ul');
             subList.classList.add('hidden');
             parentElement.appendChild(subList);
             
-            // Add folder icon toggle
+            // Add folder click handler for expansion
             listItem.addEventListener('click', (e) => {
                 e.stopPropagation();
                 subList.classList.toggle('hidden');
@@ -566,11 +707,21 @@ class PlutoFileBrowser {
                     icon.className = 'fas fa-folder-open';
                 }
                 
-                // Lazy load directory contents
+                // Load directory contents
                 if (!subList.classList.contains('hidden') && subList.children.length === 0) {
-                    item.contents.forEach(subItem => {
-                        this.createTreeItem(subItem, subList);
-                    });
+                    if (item.contents && item.contents.length > 0) {
+                        item.contents.forEach(subItem => {
+                            this.createTreeItem(subItem, subList);
+                        });
+                    } else {
+                        // Show empty folder message
+                        const emptyMessage = document.createElement('li');
+                        emptyMessage.className = 'empty-message';
+                        emptyMessage.textContent = 'Folder is empty';
+                        emptyMessage.style.fontStyle = 'italic';
+                        emptyMessage.style.color = '#6c757d';
+                        subList.appendChild(emptyMessage);
+                    }
                 }
             });
 
@@ -583,13 +734,27 @@ class PlutoFileBrowser {
         
         // Handle file interactions
         if (item.type === 'file') {
-            listItem.addEventListener('dblclick', () => this.openFile(item));
-            listItem.addEventListener('contextmenu', (e) => {
-                e.preventDefault();
-                this.showContextMenu(e, 'fileContextMenu', item);
-            });
+            // Only allow opening Pluto notebooks
+            if (item.is_pluto_notebook) {
+                listItem.addEventListener('dblclick', () => this.openFile(item));
+                listItem.addEventListener('contextmenu', (e) => {
+                    e.preventDefault();
+                    this.showContextMenu(e, 'fileContextMenu', item);
+                });
+            } else {
+                // Add different context menu for non-notebook files
+                listItem.addEventListener('contextmenu', (e) => {
+                    e.preventDefault();
+                    this.showContextMenu(e, 'fileContextMenu', item);
+                });
+                
+                // Add visual indicator that it's not openable
+                listItem.style.opacity = '0.7';
+                listItem.title = 'Not a Pluto notebook - right-click for options';
+            }
         }
     }
+    
     
     showContextMenu(event, menuId, item) {
         this.hideAllContextMenus();
@@ -627,32 +792,122 @@ class PlutoFileBrowser {
         });
     }
     
+    // Update openFile to handle only Pluto notebooks
     async openFile(item = this.currentContextItem) {
         if (!item || item.type !== 'file') return;
         
-        const url = `/edit?id=${item.notebook_id}`;
-        console.log('Opening notebook:', url);
-        window.location.href = url;
+        if (!item.is_pluto_notebook) {
+            alert('This file is not a Pluto notebook and cannot be opened in the editor.');
+            return;
+        }
+        
+        if (!item.notebook_id) {
+            // Notebook is not running - need to open it first
+            const openUrl = `/open?path=${encodeURIComponent(item.path)}`;
+            console.log('Opening notebook:', openUrl);
+            window.location.href = openUrl;
+        } else {
+            // Notebook is already running
+            const editUrl = `/edit?id=${item.notebook_id}`;
+            console.log('Opening running notebook:', editUrl);
+            window.location.href = editUrl;
+        }
     }
     
-    async createNewFile() {
-        window.location.href = '/new';
-    }
+    // async createNewFile() {
+    //     window.location.href = '/new';
+    // }
 
     async createNewFileInFolder() {
-        // Set the current folder context for new file creation
+        console.log('=== createNewFileInFolder DEBUG START ===');
+        console.log('Creating new file in folder - context item:', this.currentContextItem);
+        
+        if (!this.currentContextItem || this.currentContextItem.type !== 'directory') {
+            console.error('Invalid context item for folder creation:', this.currentContextItem);
+            alert('Invalid folder selection');
+            return;
+        }
+        
+        // Get current folder context
+        const parentPath = this.currentContextItem.shortpath || '';
+        const parentName = this.currentContextItem.name || 'root';
+        
+        console.log('Extracted parentPath:', parentPath);
+        console.log('Extracted parentName:', parentName);
+        
+        // Store parent context for when user creates the file
+        this.fileCreationContext = {
+            parentPath: parentPath,
+            parentName: parentName
+        };
+        
+        console.log('Set file creation context:', this.fileCreationContext);
+        console.log('=== createNewFileInFolder DEBUG END ===');
+        
+        // Update dialog title to show context
+        const dialogTitle = document.querySelector('#newFilePopup h3');
+        if (dialogTitle) {
+            const parentDisplay = parentPath ? `in "${parentName}"` : 'in root';
+            dialogTitle.textContent = `Create New Notebook ${parentDisplay}`;
+            console.log('Updated dialog title to:', dialogTitle.textContent);
+        }
+        
         this.showPopup('newFilePopup');
         this.hideAllContextMenus();
+        
+        // Focus the input and clear it
+        const fileInput = document.getElementById('newFileName');
+        if (fileInput) {
+            fileInput.focus();
+            fileInput.value = '';
+        }
     }
 
     async createNewNotebook(fileName) {
+        console.log('=== createNewNotebook DEBUG START ===');
+        console.log('fileName:', fileName);
+        console.log('this.fileCreationContext:', this.fileCreationContext);
+        
+        if (!fileName || !fileName.trim()) {
+            alert('Please enter a file name');
+            return;
+        }
+        
+        // Ensure .jl extension
         if (!fileName.endsWith('.jl')) {
             fileName += '.jl';
         }
         
         try {
-            // Create new notebook - you might need to adjust this URL
-            window.location.href = `/new?name=${encodeURIComponent(fileName)}`;
+            // Build URL with folder context if available
+            let createUrl = '/new';
+            const params = new URLSearchParams();
+            
+            // Add filename
+            params.append('name', fileName.trim());
+            
+            // Add folder context if we're creating in a specific folder
+            if (this.fileCreationContext && this.fileCreationContext.parentPath) {
+                params.append('folder', this.fileCreationContext.parentPath);
+                console.log('✓ Creating notebook in folder:', this.fileCreationContext.parentPath);
+                console.log('✓ Full context:', this.fileCreationContext);
+            } else {
+                console.log('✗ No folder context - creating in root');
+                console.log('✗ fileCreationContext value:', this.fileCreationContext);
+            }
+            
+            createUrl += '?' + params.toString();
+            
+            console.log('Final URL will be:', createUrl);
+            console.log('=== createNewNotebook DEBUG END ===');
+            
+            // Clear the context after use
+            this.fileCreationContext = null;
+            
+            // Navigate to create the notebook
+            console.log('Navigating to:', createUrl);
+            window.location.href = createUrl;
+            
         } catch (error) {
             console.error('Failed to create notebook:', error);
             alert('Failed to create notebook: ' + error.message);
@@ -841,26 +1096,195 @@ class PlutoFileBrowser {
     }
 
     // Folder operations
-    async createNewFolder(folderName) {
-        console.log('Creating folder:', folderName);
-        // TODO: Implement folder creation API
-        alert('Folder creation not implemented yet');
+    async createNewFolder(folderName, parentPath = '') {
+        if (!folderName || !folderName.trim()) {
+            alert('Please enter a folder name');
+            return;
+        }
+        
+        try {
+            console.log('Creating folder:', folderName, 'in parent:', parentPath);
+            
+            // Show loading state if button exists
+            const createBtn = document.querySelector('#createFolderButton');
+            if (createBtn) {
+                const originalText = createBtn.textContent;
+                createBtn.textContent = 'Creating...';
+                createBtn.disabled = true;
+            }
+            
+            // Build URL with query parameters
+            const params = new URLSearchParams();
+            params.append('name', folderName.trim());
+            if (parentPath) {
+                params.append('parent', parentPath);
+            }
+            
+            const response = await fetch(`/api/create-folder?${params.toString()}`, {
+                method: 'POST',
+                credentials: 'include',
+                headers: {
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json'
+                }
+            });
+            
+            if (response.ok) {
+                const result = await response.json();
+                console.log('Folder created:', result);
+                
+                // Refresh file tree to show new folder
+                await this.loadFileTree();
+                
+                // Close dialog
+                this.hidePopup('newFolderPopup');
+                
+                // Clear input
+                const folderInput = document.getElementById('newFolderName');
+                if (folderInput) folderInput.value = '';
+                
+                // Show success message
+                alert(`Folder "${result.folder_name}" created successfully!`);
+                
+            } else {
+                // Handle error response
+                let errorMessage = 'Failed to create folder';
+                try {
+                    const errorData = await response.json();
+                    errorMessage = errorData.message || errorMessage;
+                } catch (e) {
+                    errorMessage = `Failed to create folder (${response.status})`;
+                }
+                throw new Error(errorMessage);
+            }
+            
+        } catch (error) {
+            console.error('Failed to create folder:', error);
+            alert('Failed to create folder: ' + error.message);
+        } finally {
+            // Reset button state
+            const createBtn = document.querySelector('#createFolderButton');
+            if (createBtn) {
+                createBtn.textContent = 'Create';
+                createBtn.disabled = false;
+            }
+        }
     }
 
     async createNewFolderInFolder() {
+        // Get current folder context
+        const parentPath = this.currentContextItem?.shortpath || '';
+        
+        // Store parent context for when user creates folder
+        this.folderCreationContext = {
+            parentPath: parentPath,
+            parentName: this.currentContextItem?.name || 'root'
+        };
+        
+        // Update dialog title to show context
+        const dialogTitle = document.querySelector('#newFolderPopup h3');
+        if (dialogTitle) {
+            const parentDisplay = parentPath ? `in "${this.currentContextItem.name}"` : 'in root';
+            dialogTitle.textContent = `Create New Folder ${parentDisplay}`;
+        }
+        
         this.showPopup('newFolderPopup');
         this.hideAllContextMenus();
+        
+        // Focus the input
+        const folderInput = document.getElementById('newFolderName');
+        if (folderInput) {
+            folderInput.focus();
+            folderInput.value = '';
+        }
     }
 
     async deleteFolder() {
         if (!this.currentContextItem) return;
         
-        if (!confirm(`Delete folder "${this.currentContextItem.name}" and all its contents?`)) return;
+        const folderName = this.currentContextItem.name;
+        const folderPath = this.currentContextItem.shortpath || this.currentContextItem.name;
         
-        console.log('Deleting folder:', this.currentContextItem.name);
-        // TODO: Implement folder deletion API
-        alert('Folder deletion not implemented yet');
+        // Enhanced confirmation dialog
+        const hasContents = this.currentContextItem.contents && this.currentContextItem.contents.length > 0;
+        const confirmMessage = hasContents 
+            ? `Delete folder "${folderName}" and ALL its contents?\n\nThis action cannot be undone!`
+            : `Delete empty folder "${folderName}"?`;
+        
+        if (!confirm(confirmMessage)) return;
+        
+        try {
+            console.log('Deleting folder:', folderPath);
+            
+            // Build URL with query parameters
+            const params = new URLSearchParams();
+            params.append('path', folderPath);
+            if (hasContents) {
+                params.append('force', 'true');  // Force delete non-empty folders
+            }
+            
+            const response = await fetch(`/api/delete-folder?${params.toString()}`, {
+                method: 'POST',
+                credentials: 'include',
+                headers: {
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json'
+                }
+            });
+            
+            if (response.ok) {
+                const result = await response.json();
+                console.log('Folder deleted:', result);
+                
+                // Refresh file tree
+                await this.loadFileTree();
+                this.hideAllContextMenus();
+                
+                alert(`Folder "${folderName}" deleted successfully!`);
+                
+            } else {
+                // Handle error response
+                let errorMessage = 'Failed to delete folder';
+                try {
+                    const errorData = await response.json();
+                    errorMessage = errorData.message || errorMessage;
+                } catch (e) {
+                    errorMessage = `Failed to delete folder (${response.status})`;
+                }
+                throw new Error(errorMessage);
+            }
+            
+        } catch (error) {
+            console.error('Failed to delete folder:', error);
+            alert('Failed to delete folder: ' + error.message);
+            this.hideAllContextMenus();
+        }
+    }
+
+    // Add method to handle folder renaming (if not already implemented)
+    async renameFolder(item, newName) {
+        console.log('Renaming folder:', item.name, 'to:', newName);
+        // TODO: Implement folder rename API similar to folder creation
+        alert('Folder rename not implemented yet');
+    }
+
+    // Update showRenameFolderDialog method
+    showRenameFolderDialog() {
+        if (!this.currentContextItem) return;
+        
+        // For now, just show alert since rename isn't fully implemented
+        alert('Folder renaming will be implemented in a future update');
         this.hideAllContextMenus();
+        
+        // Future implementation:
+        /*
+        const input = document.getElementById('renameFolderName');
+        if (input) {
+            input.value = this.currentContextItem.name;
+        }
+        this.showPopup('renameFolderPopup');
+        this.hideAllContextMenus();
+        */
     }
 
     // Logout

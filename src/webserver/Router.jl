@@ -230,28 +230,61 @@ function http_router_for(session::ServerSession)
         uri = HTTP.URI(request.target)
         query = HTTP.queryparams(uri)
         file_name = get(query, "name", nothing)
+        folder_path = get(query, "folder", "")
         @info "File name: $file_name"
+        @info "Folder path: $folder_path"
 
         # Set user-specific notebook directory
         original_notebook_dir = session.options.server.notebook
-        session.options.server.notebook = joinpath(user.home_directory, "notebooks")
+
+        # Determine target directory
+        user_notebooks_dir = joinpath(user.home_directory, "notebooks")
+        if !isempty(folder_path)
+            # Create notebook in specified subfolder
+            target_dir = joinpath(user_notebooks_dir, folder_path)
+            # Ensure the target directory exists
+            if !isdir(target_dir)
+                mkpath(target_dir)
+            end
+        else
+            target_dir = user_notebooks_dir
+        end
+
+        if file_name !== nothing
+            # Ensure file name is safe and valid
+            file_name = replace(file_name, r"[^a-zA-Z0-9_\-\.]" => "_")
+            if !endswith(file_name, ".jl")
+                file_name *= ".jl"  # Ensure it has .jl extension
+            end
+            save_path = joinpath(target_dir, file_name)
+        else 
+            save_path = nothing
+        end
         
         try
             result = with_user_working_directory(user, () -> begin
-                nb = SessionActions.new(session, filename_base=file_name)
-                add_notebook_to_user(session, user.id, nb.notebook_id)
+                nb = if file_name !== nothing
+                    # Create with specific filename
+                    SessionActions.new(session; path=save_path)
+                else
+                    # Create with default name
+                    SessionActions.new(session)
+                end
+                
+                # Associate notebook with user
+                if user !== nothing
+                    add_notebook_to_user(session, user.id, nb.notebook_id)
+                end
+                
+                @info "Created notebook: $(nb.path) for user: $(user.username)"
+                
                 return notebook_response(nb; as_redirect=(request.method == "GET"))
-        end)
-        return result
-            # end
-            # return result
-        catch e
-            if e isa SessionActions.NotebookIsRunningException
-                notebook_response(e.notebook; as_redirect=(request.method == "GET"))
-            else
-                error_response(500, "Failed to create notebook", "Please try again", sprint(showerror, e, stacktrace(catch_backtrace())))
-            end
+            end)
+            
+            return result
+            
         finally
+            # Restore original notebook directory
             session.options.server.notebook = original_notebook_dir
         end
     end
@@ -389,7 +422,7 @@ function http_router_for(session::ServerSession)
         session.notebooks[id]
     end
     
-    # New route to return all notebooks in user's folder as JSON
+    # Replace the existing serve_user_notebooks_json function with this enhanced version
     function serve_user_notebooks_json(request::HTTP.Request)
         user = user_from_context(request)
         if user === nothing
@@ -402,91 +435,204 @@ function http_router_for(session::ServerSession)
             
             if !isdir(user_notebooks_dir)
                 return HTTP.Response(200, JSON.json(Dict(
-                    "notebooks" => [],
+                    "tree" => Dict(
+                        "name" => "notebooks",
+                        "type" => "directory",
+                        "path" => "",
+                        "contents" => []
+                    ),
                     "user" => user.username,
                     "message" => "Notebooks directory not found"
                 )))
             end
             
-            notebooks = []
-            
-            # Recursively find all .jl files in the notebooks directory
-            function scan_directory(dir_path, relative_path="")
-                for item in readdir(dir_path, join=false)
-                    item_path = joinpath(dir_path, item)
-                    item_relative = isempty(relative_path) ? item : joinpath(relative_path, item)
+            # Build complete directory tree structure
+            function build_directory_tree(dir_path, relative_path="")
+                items = []
+                
+                try
+                    # Read directory contents
+                    dir_entries = readdir(dir_path, join=false)
                     
-                    if isdir(item_path)
-                        # Recursively scan subdirectories
-                        scan_directory(item_path, item_relative)
-                    elseif isfile(item_path) && endswith(lowercase(item), ".jl")
-                        # Check if it's a Pluto notebook by looking for the header
-                        try
-                            file_content = read(item_path, String)
-                            if startswith(file_content, "### A Pluto.jl notebook ###")
-                                # Try to find existing notebook in session
-                                existing_notebook = nothing
-                                notebook_id = nothing
-                                process_status = "not_running"
-                                
-                                # Search for this notebook in the current session
-                                for (id, nb) in session.notebooks
-                                    if nb.path == item_path
-                                        existing_notebook = nb
-                                        notebook_id = string(id)
-                                        process_status = "running"
-                                        break
+                    # Sort entries: directories first, then files, both alphabetically
+                    sort!(dir_entries, by = name -> (isdir(joinpath(dir_path, name)) ? "0_$name" : "1_$name"))
+                    
+                    for entry in dir_entries
+                        entry_path = joinpath(dir_path, entry)
+                        entry_relative = isempty(relative_path) ? entry : joinpath(relative_path, entry)
+                        
+                        if isdir(entry_path)
+                            # This is a directory - include it regardless of contents
+                            subdirectory_contents = build_directory_tree(entry_path, entry_relative)
+                            
+                            push!(items, Dict(
+                                "name" => entry,
+                                "type" => "directory",
+                                "path" => entry_path,
+                                "shortpath" => entry_relative,
+                                "contents" => subdirectory_contents,
+                                "size" => 0,
+                                "modified" => string(Dates.unix2datetime(stat(entry_path).mtime)),
+                                "is_empty" => isempty(subdirectory_contents)
+                            ))
+                            
+                        elseif isfile(entry_path)
+                            # This is a file
+                            file_stat = stat(entry_path)
+                            
+                            if endswith(lowercase(entry), ".jl")
+                                # Check if it's a Pluto notebook
+                                try
+                                    file_content = read(entry_path, String)
+                                    is_pluto_notebook = startswith(file_content, "### A Pluto.jl notebook ###")
+                                    
+                                    if is_pluto_notebook
+                                        # Try to find existing notebook in session
+                                        existing_notebook = nothing
+                                        notebook_id = nothing
+                                        process_status = "not_running"
+                                        
+                                        # Search for this notebook in the current session
+                                        for (id, nb) in session.notebooks
+                                            if nb.path == entry_path
+                                                existing_notebook = nb
+                                                notebook_id = string(id)
+                                                process_status = "running"
+                                                break
+                                            end
+                                        end
+                                        
+                                        push!(items, Dict(
+                                            "name" => entry,
+                                            "type" => "file",
+                                            "file_type" => "pluto_notebook",
+                                            "path" => entry_path,
+                                            "shortpath" => entry_relative,
+                                            "notebook_id" => notebook_id,
+                                            "process_status" => process_status,
+                                            "in_temp_dir" => false,
+                                            "size" => file_stat.size,
+                                            "modified" => string(Dates.unix2datetime(file_stat.mtime)),
+                                            "is_running" => existing_notebook !== nothing,
+                                            "is_pluto_notebook" => true
+                                        ))
+                                    else
+                                        # Regular .jl file (not a Pluto notebook)
+                                        push!(items, Dict(
+                                            "name" => entry,
+                                            "type" => "file",
+                                            "file_type" => "julia_file",
+                                            "path" => entry_path,
+                                            "shortpath" => entry_relative,
+                                            "notebook_id" => nothing,
+                                            "process_status" => "not_applicable",
+                                            "in_temp_dir" => false,
+                                            "size" => file_stat.size,
+                                            "modified" => string(Dates.unix2datetime(file_stat.mtime)),
+                                            "is_running" => false,
+                                            "is_pluto_notebook" => false
+                                        ))
                                     end
+                                catch e
+                                    @warn "Error reading .jl file $entry_path: $e"
+                                    # Still add it as a file but mark as unreadable
+                                    push!(items, Dict(
+                                        "name" => entry,
+                                        "type" => "file",
+                                        "file_type" => "julia_file",
+                                        "path" => entry_path,
+                                        "shortpath" => entry_relative,
+                                        "notebook_id" => nothing,
+                                        "process_status" => "unknown",
+                                        "in_temp_dir" => false,
+                                        "size" => file_stat.size,
+                                        "modified" => string(Dates.unix2datetime(file_stat.mtime)),
+                                        "is_running" => false,
+                                        "is_pluto_notebook" => false,
+                                        "error" => "Could not read file"
+                                    ))
+                                end
+                            else
+                                # Non-.jl file (text, markdown, etc.)
+                                file_extension = lowercase(splitext(entry)[2])
+                                file_type = if file_extension in [".md", ".txt", ".rst"]
+                                    "text_file"
+                                elseif file_extension in [".json", ".toml", ".yaml", ".yml"]
+                                    "config_file"
+                                elseif file_extension in [".png", ".jpg", ".jpeg", ".gif", ".svg"]
+                                    "image_file"
+                                else
+                                    "other_file"
                                 end
                                 
-                                # # If not found in session, generate a consistent ID based on file path
-                                # if notebook_id === nothing
-                                #     notebook_id = string(hash(item_path))
-                                # end
-                                
-                                # Get file info
-                                file_stat = stat(item_path)
-                                
-                                push!(notebooks, Dict(
-                                    "notebook_id" => notebook_id,
-                                    "name" => item,
-                                    "shortpath" => item_relative,
-                                    "process_status" => process_status,
-                                    "in_temp_dir" => false, # User files are not in temp
+                                push!(items, Dict(
+                                    "name" => entry,
+                                    "type" => "file",
+                                    "file_type" => file_type,
+                                    "path" => entry_path,
+                                    "shortpath" => entry_relative,
+                                    "notebook_id" => nothing,
+                                    "process_status" => "not_applicable",
+                                    "in_temp_dir" => false,
                                     "size" => file_stat.size,
                                     "modified" => string(Dates.unix2datetime(file_stat.mtime)),
-                                    "is_running" => existing_notebook !== nothing
+                                    "is_running" => false,
+                                    "is_pluto_notebook" => false,
+                                    "file_extension" => file_extension
                                 ))
                             end
-                        catch e
-                            @warn "Error reading file $item_path: $e"
-                            # Still add it as a potential notebook file
-                            push!(notebooks, Dict(
-                                "notebook_id" => nothing,
-                                "name" => item,
-                                "shortpath" => item_relative,
-                                "process_status" => "unknown",
-                                "in_temp_dir" => false,
-                                "size" => 0,
-                                "modified" => "",
-                                "is_running" => false,
-                                "error" => "Could not read file"
-                            ))
+                        end
+                    end
+                    
+                catch e
+                    @warn "Error reading directory $dir_path: $e"
+                end
+                
+                return items
+            end
+            
+            # Build the complete tree starting from notebooks directory
+            tree_contents = build_directory_tree(user_notebooks_dir)
+            
+            # Count different types of items
+            function count_items(items)
+                counts = Dict("folders" => 0, "notebooks" => 0, "other_files" => 0, "total" => 0)
+                
+                for item in items
+                    counts["total"] += 1
+                    if item["type"] == "directory"
+                        counts["folders"] += 1
+                        # Recursively count items in subdirectories
+                        sub_counts = count_items(item["contents"])
+                        counts["folders"] += sub_counts["folders"]
+                        counts["notebooks"] += sub_counts["notebooks"]
+                        counts["other_files"] += sub_counts["other_files"]
+                        counts["total"] += sub_counts["total"]
+                    elseif item["type"] == "file"
+                        if get(item, "is_pluto_notebook", false)
+                            counts["notebooks"] += 1
+                        else
+                            counts["other_files"] += 1
                         end
                     end
                 end
+                
+                return counts
             end
             
-            # Scan the user's notebooks directory
-            scan_directory(user_notebooks_dir)
+            item_counts = count_items(tree_contents)
             
-            # Sort notebooks by name
-            sort!(notebooks, by = nb -> nb["name"])
-            
+            # Prepare response
             response_data = Dict(
-                "notebooks" => notebooks,
+                "tree" => Dict(
+                    "name" => "notebooks",
+                    "type" => "directory", 
+                    "path" => user_notebooks_dir,
+                    "shortpath" => "",
+                    "contents" => tree_contents
+                ),
                 "user" => user.username,
-                "count" => length(notebooks),
+                "counts" => item_counts,
                 "timestamp" => string(now())
             )
             
@@ -697,6 +843,182 @@ function http_router_for(session::ServerSession)
     end
     HTTP.register!(router, "GET", "/**", serve_asset)
     HTTP.register!(router, "GET", "/favicon.ico", create_serve_onefile(project_relative_path(frontend_directory(allow_bundled=false), "img", "favicon.ico")))
+
+
+
+    # Folder management endpoints
+    # Add this route after the existing routes, before the return statement
+
+    # Folder creation route
+    function serve_create_folder(request::HTTP.Request)
+        user = user_from_context(request)
+        if user === nothing
+            return HTTP.Response(403, "Authentication required")
+        end
+        
+        try
+            uri = HTTP.URI(request.target)
+            query = HTTP.queryparams(uri)
+            
+            # Get folder name from query parameters
+            folder_name = get(query, "name", nothing)
+            parent_path = get(query, "parent", "")  # Optional parent directory
+            
+            if folder_name === nothing || isempty(strip(folder_name))
+                return error_response(400, "Invalid folder name", "Folder name cannot be empty")
+            end
+            
+            # Sanitize folder name (remove invalid characters)
+            sanitized_name = replace(folder_name, r"[<>:\"/\\|?*]" => "_")
+            if sanitized_name != folder_name
+                @info "Folder name sanitized: '$folder_name' -> '$sanitized_name'"
+            end
+            
+            @info "Creating folder: '$sanitized_name' in parent: '$parent_path' for user: $(user.username)"
+            
+            # Create folder in user's directory
+            result_path = with_user_working_directory(user, () -> begin
+                user_notebooks_dir = joinpath(user.home_directory, "notebooks")
+                
+                # Ensure notebooks directory exists
+                if !isdir(user_notebooks_dir)
+                    mkpath(user_notebooks_dir)
+                end
+                
+                # Determine target directory
+                if !isempty(parent_path)
+                    # Validate parent path is within user's directory
+                    full_parent_path = joinpath(user_notebooks_dir, parent_path)
+                    if !startswith(abspath(full_parent_path), abspath(user_notebooks_dir))
+                        throw(ArgumentError("Invalid parent path: access denied"))
+                    end
+                    target_dir = full_parent_path
+                else
+                    target_dir = user_notebooks_dir
+                end
+                
+                # Create the new folder path
+                new_folder_path = joinpath(target_dir, sanitized_name)
+                
+                # Check if folder already exists
+                if isdir(new_folder_path)
+                    # Generate unique name if folder exists
+                    counter = 1
+                    while isdir(new_folder_path)
+                        unique_name = "$(sanitized_name)_$(counter)"
+                        new_folder_path = joinpath(target_dir, unique_name)
+                        counter += 1
+                    end
+                    @info "Folder exists, using unique name: $(basename(new_folder_path))"
+                end
+                
+                # Create the directory
+                mkpath(new_folder_path)
+                @info "Folder created successfully: $new_folder_path"
+                
+                return new_folder_path
+            end)
+            
+            # Return success response with folder info
+            relative_path = relpath(result_path, joinpath(user.home_directory, "notebooks"))
+            response_data = Dict(
+                "status" => "success",
+                "message" => "Folder created successfully",
+                "folder_name" => basename(result_path),
+                "folder_path" => relative_path,
+                "full_path" => result_path
+            )
+            
+            response = HTTP.Response(200, JSON.json(response_data))
+            HTTP.setheader(response, "Content-Type" => "application/json; charset=utf-8")
+            return response
+            
+        catch e
+            @error "Failed to create folder:" exception=(e, catch_backtrace())
+            return error_response(500, "Folder Creation Failed", 
+                "An error occurred while creating the folder: $(string(e))")
+        end
+    end
+    HTTP.register!(router, "POST", "/api/create-folder", serve_create_folder)
+
+    # Folder deletion route
+    function serve_delete_folder(request::HTTP.Request)
+        user = user_from_context(request)
+        if user === nothing
+            return HTTP.Response(403, "Authentication required")
+        end
+        
+        try
+            uri = HTTP.URI(request.target)
+            query = HTTP.queryparams(uri)
+            
+            folder_path = get(query, "path", nothing)
+            force_delete = haskey(query, "force")  # Force delete non-empty folders
+            
+            if folder_path === nothing || isempty(strip(folder_path))
+                return error_response(400, "Invalid folder path", "Folder path cannot be empty")
+            end
+            
+            @info "Deleting folder: '$folder_path' for user: $(user.username)"
+            
+            # Delete folder from user's directory
+            with_user_working_directory(user, () -> begin
+                user_notebooks_dir = joinpath(user.home_directory, "notebooks")
+                full_folder_path = joinpath(user_notebooks_dir, folder_path)
+                
+                # Security check: ensure path is within user's directory
+                if !startswith(abspath(full_folder_path), abspath(user_notebooks_dir))
+                    throw(ArgumentError("Invalid folder path: access denied"))
+                end
+                
+                if !isdir(full_folder_path)
+                    throw(ArgumentError("Folder does not exist: $folder_path"))
+                end
+                
+                # Check if folder is empty (unless force delete)
+                if !force_delete && !isempty(readdir(full_folder_path))
+                    throw(ArgumentError("Folder is not empty. Use force=true to delete non-empty folders."))
+                end
+                
+                # Shutdown any running notebooks in this folder first
+                for (notebook_id, notebook) in session.notebooks
+                    if startswith(notebook.path, full_folder_path) && user_can_access_notebook(session, user.id, notebook_id)
+                        try
+                            @info "Shutting down notebook in deleted folder: $(notebook.path)"
+                            SessionActions.shutdown(session, notebook; keep_in_session=false, async=false)
+                            remove_notebook_from_user(session, user.id, notebook_id)
+                        catch e
+                            @warn "Failed to shutdown notebook $(notebook_id): $e"
+                        end
+                    end
+                end
+                
+                # Delete the folder
+                rm(full_folder_path; recursive=true, force=true)
+                @info "Folder deleted successfully: $full_folder_path"
+            end)
+            
+            response_data = Dict(
+                "status" => "success",
+                "message" => "Folder deleted successfully",
+                "folder_path" => folder_path
+            )
+            
+            response = HTTP.Response(200, JSON.json(response_data))
+            HTTP.setheader(response, "Content-Type" => "application/json; charset=utf-8")
+            return response
+            
+        catch e
+            @error "Failed to delete folder:" exception=(e, catch_backtrace())
+            error_msg = if isa(e, ArgumentError)
+                string(e)
+            else
+                "An error occurred while deleting the folder: $(string(e))"
+            end
+            return error_response(500, "Folder Deletion Failed", error_msg)
+        end
+    end
+    HTTP.register!(router, "POST", "/api/delete-folder", serve_delete_folder)
 
     return scoped_router(session.options.server.base_url, router)
 end

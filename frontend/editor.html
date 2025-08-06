@@ -146,11 +146,23 @@
         </div>
     </div>
 
+    <!-- Add this after the existing rename dialog -->
+    <!-- New Folder Dialog -->
     <div id="newFolderPopup" class="popup-dialog">
         <div class="popup-content">
             <h3>Create New Folder</h3>
-            <label for="newFolderName">Enter folder name:</label>
-            <input type="text" id="newFolderName" placeholder="NewFolder">
+            <label for="newFolderName">Folder name:</label>
+            <input 
+                type="text" 
+                id="newFolderName" 
+                placeholder="My Folder"
+                maxlength="255"
+                pattern="[^<>:\"/\\|?*]+"
+                title="Folder name cannot contain: < > : \" / \ | ? *"
+            >
+            <small style="color: #666; font-size: 12px;">
+                Special characters will be replaced with underscores
+            </small>
             <div class="popup-buttons">
                 <button class="btn btn-primary" id="createFolderButton">Create</button>
                 <button class="btn btn-secondary" id="cancelFolderButton">Cancel</button>
