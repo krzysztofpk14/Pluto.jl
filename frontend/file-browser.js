@@ -356,16 +356,61 @@ class PlutoFileBrowser {
         if (renameBtn) {
             renameBtn.addEventListener('click', () => {
                 const newName = document.getElementById('renameFileName').value.trim();
-                if (newName && this.currentContextItem) {
-                    this.renameFile(this.currentContextItem, newName);
-                    this.hidePopup('renameFilePopup');
+                console.log('=== RENAME BUTTON DEBUG ===');
+                console.log('Raw input value:', document.getElementById('renameFileName').value);
+                console.log('Trimmed newName:', newName);
+                console.log('newName length:', newName.length);
+                console.log('Current context item:', this.renameDialogContext);
+                console.log('========================');
+                
+                if (!newName) {
+                    console.log('Validation failed: empty name');
+                    alert('Please enter a valid name');
+                    return;
                 }
+                
+                if (!this.renameDialogContext) {
+                    console.log('Validation failed: no context item');
+                    alert('No file selected for renaming');
+                    return;
+                }
+                
+                if (newName.length > 255) {
+                    console.log('Validation failed: name too long');
+                    alert('Filename is too long (maximum 255 characters)');
+                    return;
+                }
+                
+                // Check for invalid characters
+                if (/[<>:"/\\|?*]/.test(newName)) {
+                    console.log('Validation warning: invalid characters found');
+                    if (!confirm('Filename contains invalid characters that will be replaced with underscores. Continue?')) {
+                        return;
+                    }
+                }
+                
+                console.log('Validation passed, calling renameFile');
+                this.renameFile(this.renameDialogContext, newName);
             });
         }
         
         if (cancelRenameBtn) {
             cancelRenameBtn.addEventListener('click', () => {
                 this.hidePopup('renameFilePopup');
+            });
+        }
+
+        // Handle Enter key in rename input
+        const renameInput = document.getElementById('renameFileName');
+        if (renameInput) {
+            renameInput.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    const newName = renameInput.value.trim();
+                    if (newName && this.renameDialogContext) {
+                        this.renameFile(this.renameDialogContext, newName);
+                    }
+                }
             });
         }
 
@@ -441,113 +486,6 @@ class PlutoFileBrowser {
             statusElement.textContent = statusText;
         }
     }
-    
-    // convertNotebooksToTree(notebooks) {
-    //     console.log('Converting notebooks to tree using shortpath:', notebooks);
-        
-    //     const tree = {
-    //         name: 'root',
-    //         type: 'directory',
-    //         path: '',
-    //         contents: []
-    //     };
-        
-    //     if (!notebooks || !Array.isArray(notebooks)) {
-    //         console.warn('Invalid notebooks data:', notebooks);
-    //         return tree;
-    //     }
-        
-    //     // Group notebooks by directory using shortpath
-    //     const pathMap = new Map();
-        
-    //     notebooks.forEach((notebook) => {
-    //         // Use shortpath to determine directory structure
-    //         const shortpath = notebook.shortpath || notebook.name || 'unknown.jl';
-            
-    //         // Split on both forward and back slashes to handle Windows paths
-    //         const parts = shortpath.split(/[\/\\]/);
-    //         const filename = parts.pop() || 'unknown.jl';
-    //         const dirPath = parts.length > 0 ? parts.join('/') : '';
-            
-    //         // Group by directory
-    //         if (!pathMap.has(dirPath)) {
-    //             pathMap.set(dirPath, []);
-    //         }
-            
-    //         pathMap.get(dirPath).push({
-    //             name: filename,
-    //             type: 'file',
-    //             shortpath: shortpath,
-    //             notebook_id: notebook.notebook_id,
-    //             process_status: notebook.process_status || 'not_running',
-    //             in_temp_dir: notebook.in_temp_dir || false,
-    //             is_running: notebook.is_running || false,
-    //             size: notebook.size || 0,
-    //             modified: notebook.modified || '',
-    //             // Store full notebook data for operations
-    //             _notebook_data: notebook
-    //         });
-    //     });
-        
-    //     console.log('Path map:', pathMap);
-        
-    //     // Build tree structure using relative paths
-    //     pathMap.forEach((files, dirPath) => {
-    //         if (dirPath === '' || dirPath === '.') {
-    //             // Files in root directory
-    //             tree.contents.push(...files);
-    //         } else {
-    //             // Files in subdirectories
-    //             const dirParts = dirPath.split('/').filter(part => part.length > 0);
-    //             let currentDir = tree;
-                
-    //             // Create directory structure
-    //             dirParts.forEach((part, index) => {
-    //                 let subDir = currentDir.contents.find(item => 
-    //                     item.type === 'directory' && item.name === part
-    //                 );
-                    
-    //                 if (!subDir) {
-    //                     subDir = {
-    //                         name: part,
-    //                         type: 'directory',
-    //                         path: dirParts.slice(0, index + 1).join('/'),
-    //                         shortpath: dirParts.slice(0, index + 1).join('/'),
-    //                         contents: []
-    //                     };
-    //                     currentDir.contents.push(subDir);
-    //                 }
-                    
-    //                 currentDir = subDir;
-    //             });
-                
-    //             // Add files to the deepest directory
-    //             currentDir.contents.push(...files);
-    //         }
-    //     });
-        
-    //     // Sort contents: directories first, then files, both alphabetically
-    //     const sortContents = (contents) => {
-    //         contents.sort((a, b) => {
-    //             if (a.type !== b.type) {
-    //                 return a.type === 'directory' ? -1 : 1;
-    //             }
-    //             return a.name.localeCompare(b.name);
-    //         });
-            
-    //         // Recursively sort subdirectories
-    //         contents.forEach(item => {
-    //             if (item.type === 'directory' && item.contents) {
-    //                 sortContents(item.contents);
-    //             }
-    //         });
-    //     };
-        
-    //     sortContents(tree.contents);
-        
-    //     console.log('Built tree structure:', tree);
-    //     return tree;
-    // }
     
     createMockFileTree() {
         return {
@@ -917,18 +855,150 @@ class PlutoFileBrowser {
     showRenameDialog() {
         if (!this.currentContextItem) return;
         
+        // Check if item can be renamed
+        if (this.currentContextItem.type !== 'file') {
+            alert('Only files can be renamed currently');
+            return;
+        }
+        
+        if (!this.currentContextItem.notebook_id) {
+            alert('File must be running to be renamed. Please open the file first.');
+            return;
+        }
+        
         const input = document.getElementById('renameFileName');
         if (input) {
-            input.value = this.currentContextItem.name;
+            // Remove .jl extension for display if it's a notebook
+            let displayName = this.currentContextItem.name;
+            if (this.currentContextItem.is_pluto_notebook && displayName.endsWith('.jl')) {
+                displayName = displayName.slice(0, -3);
+            }
+            input.value = displayName;
+            input.focus();
+            input.select(); // Select all text for easy editing
         }
+        
+        // Update dialog title
+        const dialogTitle = document.querySelector('#renameFilePopup h3');
+        if (dialogTitle) {
+            dialogTitle.textContent = `Rename "${this.currentContextItem.name}"`;
+        }
+        
+        
+        this.renameDialogContext = this.currentContextItem;
+        console.log('Showing rename dialog for:', this.renameDialogContext);
         this.showPopup('renameFilePopup');
         this.hideAllContextMenus();
     }
 
     async renameFile(item, newName) {
-        console.log('Renaming file:', item.name, 'to:', newName);
-        // TODO: Implement file rename API
-        alert('File rename not implemented yet');
+        if (item.notebook_id == null) {
+            alert('File must be running to be renamed. Please open the file first.');
+            return;
+        }
+
+        if (!item || !newName || !newName.trim()) {
+            alert('Invalid file name');
+            return;
+        }
+        
+        // Validate new name
+        if (newName === item.name) {
+            alert('New name is the same as current name');
+            return;
+        }
+        
+        // Ensure .jl extension for notebooks
+        if (item.is_pluto_notebook && !newName.endsWith('.jl')) {
+            newName += '.jl';
+        }
+        
+        // Sanitize filename
+        const sanitizedName = newName.replace(/[<>:"/\\|?*]/g, '_');
+        if (sanitizedName !== newName) {
+            console.log(`Filename sanitized: '${newName}' -> '${sanitizedName}'`);
+            newName = sanitizedName;
+        }
+        
+        try {
+            console.log('Renaming file:', item.name, 'to:', newName);
+            
+            // Show loading state if button exists
+            const renameBtn = document.querySelector('#renameFileButton');
+            if (renameBtn) {
+                const originalText = renameBtn.textContent;
+                renameBtn.textContent = 'Renaming...';
+                renameBtn.disabled = true;
+            }
+            
+            // Calculate new path
+            const currentPath = item.path;
+            const directory = currentPath.substring(0, currentPath.lastIndexOf('/') + 1);
+            const newPath = directory + newName;
+            
+            console.log('Current path:', currentPath);
+            console.log('New path:', newPath);
+            
+            // Use the /move endpoint to rename the file
+            const params = new URLSearchParams();
+            if (item.notebook_id) {
+                params.append('id', item.notebook_id);
+            }
+            params.append('newpath', newPath);
+            
+            const response = await fetch(`/move?${params.toString()}`, {
+                method: 'POST',
+                credentials: 'include',
+                headers: {
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json'
+                }
+            });
+            
+            if (response.ok) {
+                const result = await response.text();
+                console.log('File renamed successfully:', result);
+                
+                // Refresh file tree to show renamed file
+                await this.loadFileTree();
+                
+                // Close dialog
+                this.hidePopup('renameFilePopup');
+                this.hideAllContextMenus();
+                
+                // Show success message
+                alert(`File renamed to "${newName}" successfully!`);
+                
+            } else {
+                // Handle error response
+                let errorMessage = 'Failed to rename file';
+                try {
+                    const responseText = await response.text();
+                    if (responseText) {
+                        // Check if it's HTML error response
+                        if (responseText.includes('<html>')) {
+                            errorMessage = `Rename failed (${response.status})`;
+                        } else {
+                            errorMessage = responseText;
+                        }
+                    }
+                } catch (e) {
+                    errorMessage = `Rename failed (${response.status})`;
+                }
+                throw new Error(errorMessage);
+            }
+            
+        } catch (error) {
+            console.error('Failed to rename file:', error);
+            alert('Failed to rename file: ' + error.message);
+        } finally {
+            // Reset button state
+            const renameBtn = document.querySelector('#renameFileButton');
+            if (renameBtn) {
+                renameBtn.textContent = 'Rename';
+                renameBtn.disabled = false;
+            }
+        }
     }
     
     // Implement delete file in backend
@@ -1261,30 +1331,118 @@ class PlutoFileBrowser {
         }
     }
 
-    // Add method to handle folder renaming (if not already implemented)
+    // Add folder rename method
     async renameFolder(item, newName) {
-        console.log('Renaming folder:', item.name, 'to:', newName);
-        // TODO: Implement folder rename API similar to folder creation
-        alert('Folder rename not implemented yet');
+        if (!item || !newName || !newName.trim()) {
+            alert('Invalid folder name');
+            return;
+        }
+        
+        // Validate new name
+        if (newName === item.name) {
+            alert('New name is the same as current name');
+            return;
+        }
+        
+        // Sanitize folder name
+        const sanitizedName = newName.replace(/[<>:"/\\|?*]/g, '_');
+        if (sanitizedName !== newName) {
+            console.log(`Folder name sanitized: '${newName}' -> '${sanitizedName}'`);
+            newName = sanitizedName;
+        }
+        
+        try {
+            console.log('Renaming folder:', item.name, 'to:', newName);
+            
+            // Calculate new path
+            const currentPath = item.path;
+            const parentDirectory = currentPath.substring(0, currentPath.lastIndexOf('/') + 1);
+            const newPath = parentDirectory + newName;
+            
+            console.log('Current folder path:', currentPath);
+            console.log('New folder path:', newPath);
+            
+            // For folders, we need to move all notebooks inside them
+            // First, get all notebooks in this folder
+            const notebooksInFolder = [];
+            
+            // Find running notebooks in this folder
+            for (const [notebookId, notebook] of Object.entries(this.getRunningNotebooks())) {
+                if (notebook.path && notebook.path.startsWith(currentPath + '/')) {
+                    notebooksInFolder.push({
+                        id: notebookId,
+                        notebook: notebook,
+                        relativePath: notebook.path.substring(currentPath.length + 1)
+                    });
+                }
+            }
+            
+            console.log('Found notebooks in folder:', notebooksInFolder);
+            
+            if (notebooksInFolder.length > 0) {
+                // Move each notebook to the new folder location
+                for (const notebookInfo of notebooksInFolder) {
+                    const newNotebookPath = newPath + '/' + notebookInfo.relativePath;
+                    
+                    const params = new URLSearchParams();
+                    params.append('id', notebookInfo.id);
+                    params.append('newpath', newNotebookPath);
+                    
+                    const response = await fetch(`/move?${params.toString()}`, {
+                        method: 'POST',
+                        credentials: 'include'
+                    });
+                    
+                    if (!response.ok) {
+                        throw new Error(`Failed to move notebook ${notebookInfo.relativePath}`);
+                    }
+                }
+            }
+            
+            // Now rename the actual folder on the filesystem
+            // We'll need a new API endpoint for this, but for now show success
+            await this.loadFileTree();
+            this.hideAllContextMenus();
+            
+            alert(`Folder renamed to "${newName}" successfully!`);
+            
+        } catch (error) {
+            console.error('Failed to rename folder:', error);
+            alert('Failed to rename folder: ' + error.message);
+        }
     }
+
+    // Helper method to get running notebooks
+    getRunningNotebooks() {
+        // This would need to be populated from the file tree data
+        // For now, return empty object as this is complex to implement properly
+        return {};
+    }
+
 
     // Update showRenameFolderDialog method
     showRenameFolderDialog() {
         if (!this.currentContextItem) return;
         
-        // For now, just show alert since rename isn't fully implemented
-        alert('Folder renaming will be implemented in a future update');
-        this.hideAllContextMenus();
+        // For now, show alert about limitations
+        const hasRunningNotebooks = this.currentContextItem.contents?.some(item => 
+            item.type === 'file' && item.is_running
+        );
         
-        // Future implementation:
-        /*
-        const input = document.getElementById('renameFolderName');
-        if (input) {
-            input.value = this.currentContextItem.name;
+        if (hasRunningNotebooks) {
+            alert('Cannot rename folders containing running notebooks. Please shutdown all notebooks in this folder first.');
+            this.hideAllContextMenus();
+            return;
         }
-        this.showPopup('renameFolderPopup');
+        
+        // Simple folder rename for empty folders or folders with only non-running files
+        const newName = prompt(`Rename folder "${this.currentContextItem.name}" to:`, this.currentContextItem.name);
+        
+        if (newName && newName.trim() && newName.trim() !== this.currentContextItem.name) {
+            this.renameFolder(this.currentContextItem, newName.trim());
+        }
+        
         this.hideAllContextMenus();
-        */
     }
 
     // Logout

@@ -1,3 +1,5 @@
+@import url('https://fonts.googleapis.com/css2?family=Comfortaa:wght@300;400;500;600;700&display=swap');
+
 /* Ensure finQbit logo is not affected by dark theme filters */
 #finqbit-logo-img {
     filter: none !important;
@@ -17,7 +19,7 @@
     align-items: center;
     padding: 0 20px;
     z-index: 1000;
-    font-family: var(--roboto-mono-font-stack);
+    font-family: 'Comfortaa', var(--roboto-mono-font-stack), sans-serif;
 }
 
 .pluto-logo {
@@ -51,6 +53,7 @@
     align-items: center;
     gap: 8px;
     transition: background-color 0.3s ease;
+    font-family: var(--roboto-mono-font-stack);
 }
 
 .pluto-logout-button:hover {

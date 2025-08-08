@@ -58,7 +58,7 @@
     <div class="pluto-top-nav">
         <div class="pluto-logo">
             <img id="finqbit-logo-img" src="./img/finQbit_logo.svg" alt="finQbit" />
-            <span class="pluto-title">Pluto Notebooks</span>
+            <span class="pluto-title"><strong>finQbit</strong> Notebooks</span>
         </div>
         <div class="pluto-nav-controls">
             <button class="pluto-logout-button" id="logout-btn">
@@ -174,7 +174,10 @@
         <div class="popup-content">
             <h3>Rename File</h3>
             <label for="renameFileName">Enter new name:</label>
-            <input type="text" id="renameFileName" placeholder="RenamedNotebook.jl">
+            <input type="text" id="renameFileName" placeholder="NewNotebook" maxlength="255">
+            <small style="color: #666; font-size: 12px;">
+                Special characters will be replaced with underscores. Extension will be added automatically for notebooks.
+            </small>
             <div class="popup-buttons">
                 <button class="btn btn-primary" id="renameFileButton">Rename</button>
                 <button class="btn btn-secondary" id="cancelRenameFileButton">Cancel</button>

@@ -380,6 +380,7 @@ function http_router_for(session::ServerSession)
         query = HTTP.queryparams(uri)
         notebook = notebook_from_uri(request)
         newpath = query["newpath"]
+        newpath = joinpath(user.home_directory, "notebooks", newpath)
         
         # Check if user can access this notebook
         if !user_can_access_notebook(session, user.id, notebook.notebook_id)
@@ -663,7 +664,7 @@ function http_router_for(session::ServerSession)
         
         try
             notebook = notebook_from_uri(request)
-            if !user_can_access_notebook(session, user.id, notebook.notebook_id)
+            if !f_notebook(session, user.id, notebook.notebook_id)
                 return HTTP.Response(403, "Access denied")
             end
             
