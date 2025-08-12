@@ -11,7 +11,7 @@ mutable struct ClientSession
     connected_notebook::Union{Notebook,Nothing}
     pendingupdates::Channel
     simulated_lag::Float64
-    user::Union{Pluto.User,Nothing} # Add user context - use Any to avoid type issues TODO:change to user
+    user::Union{Pluto.User,Nothing} # Add user context
 end
 
 ClientSession(id::Symbol, stream, simulated_lag=0.0) = let
@@ -48,6 +48,7 @@ The `ServerSession` keeps track of:
 - `secret`: the web access token
 - `options`: global pluto configuration `Options` for this session.
 - `user_notebooks`: mapping of user IDs to their notebooks (multi-user)
+- `users`: mapping of user IDs to user objects (multi-user)
 """
 Base.@kwdef mutable struct ServerSession
     connected_clients::Dict{Symbol,ClientSession} = Dict{Symbol,ClientSession}()
@@ -56,6 +57,7 @@ Base.@kwdef mutable struct ServerSession
     binder_token::Union{String,Nothing} = nothing
     options::Configuration.Options = Configuration.Options()
     user_notebooks::Dict{UUID,Set{UUID}} = Dict{UUID,Set{UUID}}()  # user_id -> set of notebook_ids
+    users::Dict{UUID,Pluto.User} = Dict{UUID,Pluto.User}()  # user_id -> user object
 end
 
 function save_notebook(session::ServerSession, notebook::Notebook)
@@ -75,6 +77,7 @@ function add_notebook_to_user(session::ServerSession, user_id::UUID, notebook_id
         session.user_notebooks[user_id] = Set{UUID}()
     end
     push!(session.user_notebooks[user_id], notebook_id)
+    @info "Added notebook $notebook_id to user $user_id"
 end
 
 function remove_notebook_from_user(session::ServerSession, user_id::UUID, notebook_id::UUID)

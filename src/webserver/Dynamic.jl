@@ -101,7 +101,7 @@ function notebook_to_js(notebook::Notebook)
     Dict{String,Any}(
         "pluto_version" => PLUTO_VERSION_STR,
         "notebook_id" => notebook.notebook_id,
-        "path" => notebook.path,
+        "path" => notebook.path, # Should be deleted for security reasons
         "shortpath" => basename(notebook.path),
         "in_temp_dir" => startswith(notebook.path, new_notebooks_directory()),
         "process_status" => notebook.process_status,

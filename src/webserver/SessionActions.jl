@@ -1,6 +1,6 @@
 module SessionActions
 
-import ..Pluto: Pluto, Status, ServerSession, Notebook, Cell, emptynotebook, tamepath, new_notebooks_directory, without_pluto_file_extension, numbered_until_new, cutename, readwrite, update_save_run!, update_nbpkg_cache!, update_from_file, wait_until_file_unchanged, putnotebookupdates!, putplutoupdates!, load_notebook, clientupdate_notebook_list, WorkspaceManager, try_event_call, NewNotebookEvent, OpenNotebookEvent, ShutdownNotebookEvent, @asynclog, ProcessStatus, maybe_convert_path_to_wsl, move_notebook!, Throttled
+import ..Pluto: Pluto, Status, ServerSession, Notebook, Cell, emptynotebook, tamepath, new_notebooks_directory, without_pluto_file_extension, numbered_until_new, cutename, readwrite, update_save_run!, update_nbpkg_cache!, update_from_file, wait_until_file_unchanged, putnotebookupdates!, putplutoupdates!, load_notebook, clientupdate_notebook_list, WorkspaceManager, try_event_call, NewNotebookEvent, OpenNotebookEvent, ShutdownNotebookEvent, @asynclog, ProcessStatus, maybe_convert_path_to_wsl, move_notebook!, Throttled, add_notebook_to_user
 using FileWatching
 import ..Pluto.DownloadCool: download_cool
 import HTTP
@@ -48,7 +48,8 @@ function open(session::ServerSession, path::AbstractString;
     as_sample::Bool=false, 
     risky_file_source::Union{Nothing,String}=nothing,
     clear_frontmatter::Bool=false,
-    notebook_id::UUID=uuid1()
+    notebook_id::UUID=uuid1(),
+    user_id::Union{Nothing,UUID}=nothing
 )
     path = maybe_convert_path_to_wsl(path)
     if as_sample
@@ -84,6 +85,15 @@ function open(session::ServerSession, path::AbstractString;
 
     session.notebooks[notebook.notebook_id] = notebook
     
+    # ADD USER ASSOCIATION HERE - before any workspace/process creation
+    if user_id !== nothing
+        add_notebook_to_user(session, user_id, notebook.notebook_id)
+    else
+        @warn "No user ID provided for notebook, skipping user association"
+    end
+
+    
+    
     if execution_allowed && session.options.evaluation.run_notebook_on_load
         Pluto._report_business_cells_planned!(notebook)
     end
@@ -95,7 +105,7 @@ function open(session::ServerSession, path::AbstractString;
     end
 
     update_nbpkg_cache!(notebook)
-
+    @info "Opening notebook: $(get(session.user_notebooks, user_id, nothing)) for user: $(get(session.users, user_id, nothing))"
     update_save_run!(session, notebook, notebook.cells; run_async, prerender_text=true)
     add(session, notebook; run_async)
     try_event_call(session, OpenNotebookEvent(notebook))
@@ -219,7 +229,13 @@ function save_upload(contents::Union{String,Vector{UInt8}}; filename_base::Union
 end
 
 "Create a new empty notebook inside `session::ServerSession`. Returns the `Notebook`."
-function new(session::ServerSession; run_async=true, notebook_id::UUID=uuid1(), path::Union{Nothing,AbstractString}=nothing)
+function new(session::ServerSession; 
+    run_async=true, 
+    notebook_id::UUID=uuid1(), 
+    path::Union{Nothing,AbstractString}=nothing,
+    user_id::Union{Nothing,UUID}=nothing
+)
+
     cleaned_path = if path !== nothing
         endswith(lowercase(path), ".jl") ? path[1:end-3] : path
     else
@@ -247,6 +263,11 @@ function new(session::ServerSession; run_async=true, notebook_id::UUID=uuid1(), 
     # Run NewNotebookEvent handler before assigning ID
     isid = try_event_call(session, NewNotebookEvent())
     notebook.notebook_id = isnothing(isid) ? notebook_id : isid
+
+    # ADD USER ASSOCIATION HERE - before workspace creation
+    if user_id !== nothing
+        add_notebook_to_user(session, user_id, notebook.notebook_id)
+    end
 
     update_save_run!(session, notebook, notebook.cells; run_async, prerender_text=true)
     add(session, notebook; run_async)

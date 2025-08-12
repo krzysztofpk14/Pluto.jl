@@ -10,6 +10,11 @@ function is_authenticated(session::ServerSession, request::HTTP.Request)::Union{
             if cookie.name == "pluto_user_session"
                 user = get_user_from_session(cookie.value)
                 if user !== nothing
+                    # Update ServerSession with User
+                    if !haskey(session.users, user.id)
+                        session.users[user.id] = user
+                        @info "Authenticated user session" user_id=user.id username=user.username
+                    end
                     return user
                 end
             end

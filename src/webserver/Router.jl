@@ -206,9 +206,9 @@ function http_router_for(session::ServerSession)
             
             # Get user from context and associate notebook
             user = user_from_context(request)  # This should be passed as parameter
-            if user !== nothing
-                add_notebook_to_user(session, user.id, nb.notebook_id)
-            end
+            # if user !== nothing
+            #     add_notebook_to_user(session, user.id, nb.notebook_id)
+            # end
             
             notebook_response(nb; home_url, as_redirect)
         catch e
@@ -265,15 +265,10 @@ function http_router_for(session::ServerSession)
             result = with_user_working_directory(user, () -> begin
                 nb = if file_name !== nothing
                     # Create with specific filename
-                    SessionActions.new(session; path=save_path)
+                    SessionActions.new(session; path=save_path, user_id=user.id)
                 else
                     # Create with default name
-                    SessionActions.new(session)
-                end
-                
-                # Associate notebook with user
-                if user !== nothing
-                    add_notebook_to_user(session, user.id, nb.notebook_id)
+                    SessionActions.new(session; user_id=user.id)
                 end
                 
                 @info "Created notebook: $(nb.path) for user: $(user.username)"
@@ -316,9 +311,9 @@ function http_router_for(session::ServerSession)
                     nb = SessionActions.open(session, path; 
                         execution_allowed,
                         as_sample, 
-                        risky_file_source=nothing
+                        risky_file_source=nothing,
+                        user_id=user.id
                     )
-                    add_notebook_to_user(session, user.id, nb.notebook_id)
                     return notebook_response(nb; as_redirect=(request.method == "GET"))
                 else
                     return error_response(404, "Can't find a file here", "Please check whether <code>$(htmlesc(path))</code> exists.")
@@ -328,9 +323,9 @@ function http_router_for(session::ServerSession)
                 nb = SessionActions.open_url(session, url;
                     execution_allowed,
                     as_sample, 
-                    risky_file_source=url
+                    risky_file_source=url,
+                    user_id=user.id
                 )
-                add_notebook_to_user(session, user.id, nb.notebook_id)
                 return notebook_response(nb; as_redirect=(request.method == "GET"))
             else
                 maybe_notebook_response = try_event_call(session, CustomLaunchEvent(query, request, try_launch_notebook_response))
@@ -746,9 +741,9 @@ function http_router_for(session::ServerSession)
             nb = SessionActions.open(session, save_path;
                 execution_allowed=haskey(query, "execution_allowed"),
                 as_sample=false,
-                clear_frontmatter=haskey(query, "clear_frontmatter")
+                clear_frontmatter=haskey(query, "clear_frontmatter"),
+                user_id=user.id
             )
-            add_notebook_to_user(session, user.id, nb.notebook_id)
             return notebook_response(nb; as_redirect=false)
         catch e
             if e isa SessionActions.NotebookIsRunningException
@@ -774,9 +769,9 @@ function http_router_for(session::ServerSession)
         try
             nb = SessionActions.open(session, sample_path; 
                 as_redirect=(request.method == "GET"), 
-                as_sample=true
+                as_sample=true,
+                user_id=user.id,
             )
-            add_notebook_to_user(session, user.id, nb.notebook_id)
             return notebook_response(nb; home_url="../", as_redirect=(request.method == "GET"))
         catch e
             if e isa SessionActions.NotebookIsRunningException

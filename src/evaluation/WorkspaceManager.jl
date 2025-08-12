@@ -2,6 +2,7 @@ module WorkspaceManager
 import UUIDs: UUID, uuid1
 import ..Pluto
 import ..Pluto: Configuration, Notebook, Cell, ProcessStatus, ServerSession, ExpressionExplorer, pluto_filename, Token, withtoken, tamepath, project_relative_path, putnotebookupdates!, UpdateMessage
+import ..Pluto.User
 import ..Pluto.Status
 import ..Pluto.PkgCompat
 import ..Configuration: CompilerOptions, _merge_notebook_compiler_options, _convert_to_flags
@@ -135,12 +136,123 @@ function make_workspace((session, notebook)::SN; is_offline_renderer::Bool=false
         is_offline_renderer || if notebook.process_status == ProcessStatus.starting
             notebook.process_status = ProcessStatus.ready
         end
+
+        user = nothing
+        for (user_id, notebook_ids) in session.user_notebooks
+            if notebook.notebook_id in notebook_ids
+                user = get(session.users, user_id, nothing)
+            end 
+        end 
+
+        if user === nothing
+            @warn "No user found for notebook $(notebook.notebook_id), cannot secure workspace"
+        else
+            secure_workspace_filesystem(workspace, session, notebook, user)
+            @info "Workspace secured for user $(user.username) in notebook $(notebook.notebook_id)"
+        end
+
+
         return workspace
     catch e
         Status.report_business_finished!(workspace_business, false)
         notebook.process_status = ProcessStatus.no_process
         rethrow(e)
     end
+end
+
+function secure_workspace_filesystem(workspace::Workspace, session::ServerSession, notebook::Notebook, user::User)
+    @info "Securing workspace filesystem for notebook $(notebook.notebook_id) in workspace $(workspace.module_name)"
+    
+    if user === nothing
+        throw(ErrorException("Cannot secure workspace: no user context"))
+    end
+    
+    user_home = user.home_directory
+    notebook_dir = dirname(notebook.path)
+    
+    Malt.remote_eval_wait(workspace.worker, quote
+        # Store all original functions using @generated macros to avoid recursion
+        @generated __original_pwd() = Base.pwd()
+        
+        # Define security constants
+        const USER_HOME = $(user_home)
+        const NOTEBOOK_DIR = $(notebook_dir)
+        
+        @info "Security constants set: USER_HOME=$USER_HOME, NOTEBOOK_DIR=$NOTEBOOK_DIR"
+        
+        # Enhanced path validation function
+        function __is_path_allowed(path::AbstractString)::Bool
+            try
+                # Handle empty or "." paths using @generated original
+                if __original_isempty(path) || path == "."
+                    abs_path = __original_pwd()
+                else
+                    # Resolve all symbolic links and relative paths
+                    abs_path = __original_realpath(__original_expanduser(path))
+                end
+                
+                # Must be within user's home directory
+                if !__original_startswith(abs_path, USER_HOME)
+                    @debug "Path denied - outside USER_HOME" path abs_path USER_HOME
+                    return false
+                end
+                
+                # Additional checks for sensitive subdirectories
+                sensitive_dirs = [".ssh", ".aws", ".docker", "bin", "sbin", ".gnupg", ".config/systemd"]
+                path_parts = __original_splitpath(abs_path)
+                
+                for sensitive in sensitive_dirs
+                    if sensitive in path_parts
+                        @debug "Path denied - sensitive directory" path abs_path sensitive
+                        return false
+                    end
+                end
+                
+                @debug "Path allowed" path abs_path USER_HOME
+                return true
+            catch e
+                @warn "Path validation failed - denying access" path exception=e
+                return false
+            end
+        end
+        
+        function __validate_path_or_throw(path::AbstractString, operation::String="access")
+            if !__is_path_allowed(path)
+                error_msg = "Permission denied: Cannot $operation path outside user directory: $path (USER_HOME=$USER_HOME)"
+                @warn error_msg
+                throw(ArgumentError(error_msg))
+            end
+        end
+
+        # === FILE SYSTEM OPERATIONS ===
+        function Base.pwd()::String
+            current = __original_pwd()
+            
+            # Use original functions to avoid recursion
+            abs_current = abspath(current)
+            is_allowed = startswith(abs_current, USER_HOME)
+                
+            if !is_allowed
+                @warn "Workspace outside user directory: $current, resetting to: $NOTEBOOK_DIR"
+                cd(NOTEBOOK_DIR)
+                return NOTEBOOK_DIR
+            else
+                # Return only the path relative to USER_HOME, hiding upper directory structure
+                if abs_current == USER_HOME
+                    # If we're exactly at user home, return just "~" or "."
+                    relative_path = "."
+                else
+                    # Get the relative path from USER_HOME
+                    relative_path = abs_current[length(USER_HOME)+2:end]  # +2 to skip the trailing separator
+                end
+                
+                @info "pwd() returning sanitized path: $relative_path (actual: $current)"
+                return relative_path
+            end
+        end
+    end)
+    
+    @info "Workspace filesystem security completed successfully"
 end
 
 function use_nbpkg_environment((session, notebook)::SN, workspace=nothing)
