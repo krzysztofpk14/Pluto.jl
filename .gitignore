@@ -2,7 +2,7 @@
 *.jl.*.cov
 *.jl.mem
 build
-Manifest.toml
+# Manifest.toml #commented for Docker
 
 test/frontend/node_modules
 test/frontend/artifacts/*
