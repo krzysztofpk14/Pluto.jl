@@ -12,10 +12,13 @@
 
 ## Admin area
 - [ ] Develop admin area
-- [ ] Set up separate Julia processes - already implemented in Pluto
-- - [ ] Investigate how web client works, maybe we cen insert user there?
-- - [ ] Workspace Manager
-- - [ ] Check if `open_url` works correctly
+- [x] Set up separate Julia processes - already implemented in Pluto
+- - [x] Investigate how web client works, maybe we cen insert user there?
+- - [x] Workspace Manager
+- - [x] Check if `open_url` works correctly
 
 ## Security
 - [ ] Delete full `path` in `Dynamic.jl`. We don't want to show it to the user
+- [ ] Add SSL Certificate in Google Cloud
+- [ ] Use proper Docket USER and WORKDIR
+- [ ] New container per USER 

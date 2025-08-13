@@ -66,8 +66,10 @@ function http_router_for(session::ServerSession)
             
             user = authenticate_user(username, password)
             if user !== nothing
-                ip_address = HTTP.header(request, "X-Forwarded-For", 
-                                       HTTP.header(request, "Remote-Addr", "unknown"))
+                # ip_address = HTTP.header(request, "X-Forwarded-For", 
+                #                        HTTP.header(request, "Remote-Addr", "unknown")) # remove for now for testing
+                ip_address = "FakeIPAdress"
+
                 session_token = create_user_session(user, ip_address)
                 
                 response = HTTP.Response(302)
