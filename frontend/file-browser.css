@@ -225,6 +225,7 @@
     line-height: 1.4;
     color: var(--pluto-output-color, #333);
     position: relative;
+    border-bottom: none;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
 }
 
@@ -310,6 +311,15 @@
 
 /* Editor Container takes remaining space */
 .pluto-editor-container {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    overflow: hidden;
+}
+
+/* Main Menu Container takes remaining space */
+.nosessions {
     flex: 1;
     display: flex;
     flex-direction: column;
