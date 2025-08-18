@@ -60,6 +60,11 @@
     background-color: #e67600;
 }
 
+.platform-nav-controls {
+    display: flex;
+    align-items: center;
+}
+
 /* Main Container with flexible layout */
 .platform-main-container {
     display: flex;
