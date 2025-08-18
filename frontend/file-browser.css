@@ -6,7 +6,7 @@
 }
 
 /* Top Navigation Bar */
-.pluto-top-nav {
+.platform-top-nav {
     position: fixed;
     top: 0;
     left: 0;
@@ -22,25 +22,25 @@
     font-family: 'Comfortaa', var(--roboto-mono-font-stack), sans-serif;
 }
 
-.pluto-logo {
+.platform-logo {
     display: flex;
     align-items: center;
     gap: 12px;
 }
 
-.pluto-logo img {
+.platform-logo img {
     height: 60px;
     filter: none !important;
 }
 
-.pluto-title {
+.platform-title {
     font-size: 1.2rem;
     font-weight: 600;
     color: var(--nav-h1-text-color, white);
     letter-spacing: 1px;
 }
 
-.pluto-logout-button {
+.platform-logout-button {
     background-color: #ff8800;
     color: white;
     border: none;
@@ -56,12 +56,12 @@
     font-family: var(--roboto-mono-font-stack);
 }
 
-.pluto-logout-button:hover {
+.platform-logout-button:hover {
     background-color: #e67600;
 }
 
 /* Main Container with flexible layout */
-.pluto-main-container {
+.platform-main-container {
     display: flex;
     height: 100vh;
     padding-top: 60px; /* Account for fixed top nav */
@@ -69,7 +69,7 @@
 }
 
 /* File Browser Sidebar with resizable width */
-.pluto-file-browser {
+.platform-file-browser {
     position: relative;
     width: 300px; /* Default width */
     min-width: 250px; /* Minimum width */
@@ -84,7 +84,7 @@
 
 /* Dark theme for file browser */
 @media (prefers-color-scheme: dark) {
-    .pluto-file-browser {
+    .platform-file-browser {
         background-color: var(--main-bg-color, #2a2928);
         border-right-color: var(--header-border-color, #555);
     }
@@ -463,19 +463,19 @@
 
 /* Mobile Responsiveness */
 @media (max-width: 768px) {
-    .pluto-top-nav {
+    .platform-top-nav {
         padding: 0 10px;
     }
     
-    .pluto-title {
+    .platform-title {
         display: none;
     }
     
-    .pluto-main-container {
+    .platform-main-container {
         flex-direction: column;
     }
     
-    .pluto-file-browser {
+    .platform-file-browser {
         position: fixed;
         left: -300px;
         top: 60px;
@@ -487,7 +487,7 @@
         box-shadow: 2px 0 10px rgba(0, 0, 0, 0.1);
     }
     
-    .pluto-file-browser.open {
+    .platform-file-browser.open {
         left: 0;
     }
     
@@ -511,7 +511,7 @@
 }
 
 @media (max-width: 480px) {
-    .pluto-logout-button span {
+    .platform-logout-button span {
         display: none;
     }
     
@@ -551,7 +551,7 @@
 }
 
 /* Integration with existing Pluto styles */
-pluto-editor {
+platform-editor {
     width: 100%;
     height: 100%;
 }
@@ -563,7 +563,7 @@ pluto-editor {
 }
 
 /* Ensure proper layout for fullscreen mode */
-.pluto-editor-container pluto-editor.fullscreen {
+.pluto-editor-container platform-editor.fullscreen {
     display: flex;
     flex-direction: column;
     height: 100%;

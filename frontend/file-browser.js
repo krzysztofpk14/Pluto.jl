@@ -55,7 +55,7 @@ class PlutoFileBrowser {
 
     setupResizeHandle() {
         const resizeHandle = document.getElementById('resize-handle');
-        const fileBrowser = document.getElementById('pluto-file-browser');
+        const fileBrowser = document.getElementById('platform-file-browser');
         
         if (!resizeHandle || !fileBrowser) return;
         
@@ -64,7 +64,7 @@ class PlutoFileBrowser {
         let startWidth = 0;
         
         // Store width in localStorage for persistence
-        const savedWidth = localStorage.getItem('pluto-file-browser-width');
+        const savedWidth = localStorage.getItem('platform-file-browser-width');
         if (savedWidth) {
             fileBrowser.style.width = savedWidth + 'px';
         }
@@ -107,7 +107,7 @@ class PlutoFileBrowser {
                 
                 // Save width to localStorage
                 const currentWidth = parseInt(getComputedStyle(fileBrowser).width, 10);
-                localStorage.setItem('pluto-file-browser-width', currentWidth);
+                localStorage.setItem('platform-file-browser-width', currentWidth);
             }
         });
         
@@ -115,7 +115,7 @@ class PlutoFileBrowser {
         resizeHandle.addEventListener('dblclick', () => {
             const defaultWidth = 300;
             fileBrowser.style.width = defaultWidth + 'px';
-            localStorage.setItem('pluto-file-browser-width', defaultWidth);
+            localStorage.setItem('platform-file-browser-width', defaultWidth);
             document.documentElement.style.setProperty('--file-browser-width', defaultWidth + 'px');
         });
     }
@@ -1481,8 +1481,8 @@ class PlutoFileBrowser {
             
             if (response.ok) {
                 // Clear any stored session data
-                localStorage.removeItem('pluto-file-browser-width');
-                localStorage.removeItem('pluto-session-id');
+                localStorage.removeItem('platform-file-browser-width');
+                localStorage.removeItem('platform-session-id');
                 sessionStorage.clear();
                 
                 // Show success message briefly

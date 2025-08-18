@@ -141,6 +141,9 @@ end
 
 ###### Najważniejsza funkcja - to ona otwiera nowego notebooka ######
 function run!(session::ServerSession)
+    Genie.config.run_as_server = false
+    Genie.config.websockets_server = false
+
     if is_first_run[]
         is_first_run[] = false
         @info "Loading..."

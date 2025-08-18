@@ -4,6 +4,7 @@
 <head>
     <meta name="viewport" content="width=device-width" />
     <meta charset="utf-8" />
+    <base href="/">
 
     <meta name="pluto-insertion-spot-meta">
 
@@ -39,10 +40,14 @@
     <!-- This doesn't do anything unless activated, and it makes sure parcel bundles this -->
     <script id="iframe-resizer-content-window-script" src="https://cdn.jsdelivr.net/npm/iframe-resizer@4.3.11/js/iframeResizer.contentWindow.min.js" crossorigin="anonymous" defer></script>
 
+    <link rel="stylesheet" href="./welcome.css" type="text/css" />
+    <link rel="stylesheet" href="./index.css" type="text/css" />
     <link rel="stylesheet" href="./all-styles.css" type="text/css" />
     <link rel="stylesheet" href="./file-browser.css" type="text/css" />
 
+
     <meta name="pluto-insertion-spot-parameters">
+    <script src="index.js" type="module" defer></script>
     <script src="./editor.js" type="module" defer></script>
     <script src="./file-browser.js" type="module" defer></script>
     <script src="./warn_old_browsers.js"></script>
@@ -55,13 +60,13 @@
 
 <body class="no-MαθJax">
     <!-- Top Navigation Bar -->
-    <div class="pluto-top-nav">
-        <div class="pluto-logo">
+    <div class="platform-top-nav">
+        <div class="platform-logo">
             <img id="finqbit-logo-img" src="./img/finQbit_logo.svg" alt="finQbit" />
-            <span class="pluto-title"><strong>finQbit</strong> Notebooks</span>
+            <span class="platform-title"><strong>finQbit</strong> Notebooks</span>
         </div>
-        <div class="pluto-nav-controls">
-            <button class="pluto-logout-button" id="logout-btn">
+        <div class="platform-nav-controls">
+            <button class="platform-logout-button" id="logout-btn">
                 <i class="fas fa-sign-out-alt"></i>
                 Logout
             </button>
@@ -69,11 +74,11 @@
     </div>
 
     <!-- Main Content Area -->
-    <div class="pluto-main-container">
+    <div class="platform-main-container">
         <!-- File Browser Sidebar -->
-        <div class="pluto-file-browser" id="pluto-file-browser">
+        <div class="platform-file-browser" id="platform-file-browser">
             <div class="file-browser-header">
-                <h3>Notebooks</h3>
+                <!-- <h3>Notebooks</h3> -->
                 <div class="file-browser-toolbar">
                     <button class="toolbar-button plus" id="new-notebook-btn" title="New Notebook">
                         <i class="fas fa-plus"></i>
@@ -109,12 +114,8 @@
             <div class="resize-handle" id="resize-handle"></div>
         </div>
 
-        <!-- Editor Content -->
-        <div class="pluto-editor-container">
-            <pluto-editor class="loading fullscreen">
-                <progress style="filter: grayscale(1)" class="statefile-fetch-progress delete-me-when-live" max="100"></progress>
-            </pluto-editor>
-        </div>
+        <!-- Insert editor or welcome page here using Genie -->
+        <% @yield %>
     </div>
 
     <!-- Context Menus -->
@@ -157,9 +158,9 @@
                 id="newFolderName" 
                 placeholder="My Folder"
                 maxlength="255"
-                pattern="[^<>:\"/\\|?*]+"
-                title="Folder name cannot contain: < > : \" / \ | ? *"
             >
+            <!-- Optional lines to add in input, but do not work with Genie.jl due to special characters -->
+
             <small style="color: #666; font-size: 12px;">
                 Special characters will be replaced with underscores
             </small>

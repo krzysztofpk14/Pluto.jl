@@ -1,4 +1,5 @@
 using JSON
+using Genie
 
 
 function http_router_for(session::ServerSession)
@@ -8,6 +9,13 @@ function http_router_for(session::ServerSession)
     function create_serve_onefile(path)
         return request::HTTP.Request -> asset_response(normpath(path))
     end
+
+    # ### Check Genie ###
+    # function serve_genie(request::HTTP.Request)
+    #     name = "Mark"
+    #     return Genie.Renderer.Html.html("<h1>Welcome $(name)</h1>", layout = "<div><% @yield %></div>", name = "Adrian")
+    # end
+    # HTTP.register!(router, "GET", "/genie", serve_genie)
 
     """
     Helper function to handle user-specific operations 
@@ -192,7 +200,17 @@ function http_router_for(session::ServerSession)
             HTTP.setheader(response, "Location" => "./login")
             return response
         end
-        return create_serve_html(project_relative_path(frontend_directory(), "editor.html"))(request)
+
+        @info frontend_directory()
+        file_path = project_relative_path(frontend_directory(), "editor.jl.html")
+        file_path = Genie.Renderer.filepath(file_path)
+        layout_path = project_relative_path(frontend_directory(), "layout.jl.html")
+        layout_path = Genie.Renderer.filepath(layout_path)
+        @info file_path
+        @info layout_path
+        
+        # return create_serve_html(project_relative_path(frontend_directory(), "editor.html"))(request)
+        return Genie.Renderer.Html.html(file_path, layout=layout_path)
     end
     HTTP.register!(router, "GET", "/edit", serve_main_edit)
 
@@ -221,6 +239,7 @@ function http_router_for(session::ServerSession)
             end
         end
     end
+
 
     # Legacy /new route
     function serve_newfile(request::HTTP.Request)
@@ -807,7 +826,16 @@ function http_router_for(session::ServerSession)
             end
         end
         
-        return create_serve_html(project_relative_path(frontend_directory(), "index.html"))(request)
+        @info frontend_directory()
+        file_path = project_relative_path(frontend_directory(), "index.jl.html")
+        file_path = Genie.Renderer.filepath(file_path)
+        layout_path = project_relative_path(frontend_directory(), "layout.jl.html")
+        layout_path = Genie.Renderer.filepath(layout_path)
+        @info file_path
+        @info layout_path
+
+        # return create_serve_html(project_relative_path(frontend_directory(), "index.html"))(request)
+        return Genie.Renderer.Html.html(file_path, layout=layout_path)
     end
     
     function serve_user_edit(request::HTTP.Request)
@@ -825,8 +853,17 @@ function http_router_for(session::ServerSession)
                 return HTTP.Response(403, "Access denied")
             end
         end
+
+        @info frontend_directory()
+        file_path = project_relative_path(frontend_directory(), "editor.jl.html")
+        file_path = Genie.Renderer.filepath(file_path)
+        layout_path = project_relative_path(frontend_directory(), "layout.jl.html")
+        layout_path = Genie.Renderer.filepath(layout_path)
+        @info file_path
+        @info layout_path
         
-        return create_serve_html(project_relative_path(frontend_directory(), "editor.html"))(request)
+        # return create_serve_html(project_relative_path(frontend_directory(), "editor.html"))(request)
+        return Genie.Renderer.Html.html(file_path, layout=layout_path)
     end
 
     # Register user-specific routes
