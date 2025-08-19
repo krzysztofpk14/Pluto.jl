@@ -48,6 +48,72 @@ function http_router_for(session::ServerSession)
         end
     end
 
+
+    function get_user_pod_ip(username::String, namespace::String="plutohub")::Union{String, Nothing}
+        try
+            # Get pods with user label
+            result = read(`kubectl get pods -n $namespace -l user=$username -o jsonpath='{.items[0].status.podIP}'`, String)
+            pod_ip = strip(result)
+            
+            if isempty(pod_ip)
+                @warn "No pod IP found for user: $username"
+                return nothing
+            end
+            
+            @info "Found pod IP for user $username: $pod_ip"
+            return pod_ip
+        catch e
+            @error "Failed to get pod IP for user $username: $e"
+            return nothing
+        end
+    end
+
+    function proxy_to_user_pod(request::HTTP.Request, username::String)
+        pod_ip = get_user_pod_ip(username)
+        
+        if pod_ip === nothing
+            return error_response(503, "Pod Not Available", 
+                "Your personal Pluto server is not ready. Please try again in a moment.")
+        end
+        
+        # Modify request to point to user's pod
+        original_uri = HTTP.URI(request.target)
+        pod_uri = HTTP.URI(
+            scheme="http",
+            host=pod_ip,
+            port=8080,
+            path=original_uri.path,
+            query=original_uri.query
+        )
+        
+        @info "Proxying request to user pod: $(string(pod_uri))"
+        
+        # Forward request to user's pod
+        try
+            # Copy headers but filter out problematic ones
+            filtered_headers = filter(request.headers) do (name, value)
+                lowercase(name) ∉ ["host", "connection", "upgrade"]
+            end
+            
+            response = HTTP.request(
+                request.method,
+                string(pod_uri),
+                filtered_headers,
+                request.body;
+                connect_timeout=10,
+                readtimeout=30
+            )
+            
+            @info "Successfully proxied request to user pod"
+            return response
+            
+        catch e
+            @error "Failed to proxy to user pod: $e"
+            return error_response(502, "Pod Communication Error", 
+                "Could not communicate with your personal Pluto server.")
+        end
+    end
+
     # Login system routes
     HTTP.register!(router, "GET", "/login", create_serve_onefile(project_relative_path(frontend_directory(), "login.html")))
     
@@ -79,6 +145,17 @@ function http_router_for(session::ServerSession)
                 ip_address = "FakeIPAdress"
 
                 session_token = create_user_session(user, ip_address)
+
+                ### Pod Spawner System in Kuberetes ###
+                spawner = PlutoSpawner("plutohub", "plutohub:latest", "1", "2Gi", "5Gi"
+                )
+                
+                
+                pod_name = spawn_user_pod(spawner, user.username, string(user.id))
+                @info "Spawned pod for user $(user.username): $pod_name"
+
+                
+                    
                 
                 response = HTTP.Response(302)
                 uri = HTTP.URI(request.target)
@@ -826,15 +903,20 @@ function http_router_for(session::ServerSession)
             end
         end
         
-        @info frontend_directory()
+        # Check if user has a running pod, if so proxy to it
+        pod_ip = get_user_pod_ip(user.username)
+        if pod_ip !== nothing
+            @info "Proxying user home to pod for user: $(user.username)"
+            return proxy_to_user_pod(request, user.username)
+        end
+        
+        # Fallback to hub interface if no pod
+        @info "No pod found, serving hub interface for user: $(user.username)"
         file_path = project_relative_path(frontend_directory(), "index.jl.html")
         file_path = Genie.Renderer.filepath(file_path)
         layout_path = project_relative_path(frontend_directory(), "layout.jl.html")
         layout_path = Genie.Renderer.filepath(layout_path)
-        @info file_path
-        @info layout_path
-
-        # return create_serve_html(project_relative_path(frontend_directory(), "index.html"))(request)
+        
         return Genie.Renderer.Html.html(file_path, layout=layout_path)
     end
     

@@ -43,6 +43,7 @@ const JULIA_VERSION_STR = "v$(string(VERSION))"
 import PlutoDependencyExplorer: PlutoDependencyExplorer, TopologicalOrder, NotebookTopology, ExprAnalysisCache, ImmutableVector, ExpressionExplorerExtras, topological_order, all_cells, disjoint, where_assigned, where_referenced
 using ExpressionExplorer
 
+include("./plutohub-spawner.jl")
 include("./notebook/path helpers.jl")
 include("./notebook/Export.jl")
 include("./Configuration.jl")

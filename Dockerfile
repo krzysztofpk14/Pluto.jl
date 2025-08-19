@@ -6,6 +6,8 @@ COPY Project.toml Manifest.toml ./
 COPY . .
 RUN julia --project=@. -e   'using Pkg; Pkg.instantiate(); Pkg.precompile()'
 
+ENV PLUTO_HOST=0.0.0.0
+ENV PLUTO_PORT=8080
 
 
 CMD ["julia", "--project=@.", "start_pluto.jl"]

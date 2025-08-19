@@ -1,0 +1,27 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: plutohub-ingress
+  namespace: plutohub
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+    nginx.ingress.kubernetes.io/websocket-services: "plutohub-hub"
+spec:
+  rules:
+  - host: localhost
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: plutohub-hub
+            port:
+              number: 8080
+      - path: /user/(.+)
+        pathType: ImplementationSpecific
+        backend:
+          service:
+            name: plutohub-proxy
+            port:
+              number: 8080
