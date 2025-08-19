@@ -12,13 +12,15 @@
 
 ## Admin area
 - [ ] Develop admin area
-- [x] Set up separate Julia processes - already implemented in Pluto
-- - [x] Investigate how web client works, maybe we cen insert user there?
-- - [x] Workspace Manager
-- - [x] Check if `open_url` works correctly
 
 ## Security
 - [ ] Delete full `path` in `Dynamic.jl`. We don't want to show it to the user
 - [ ] Add SSL Certificate in Google Cloud
 - [ ] Use proper Docket USER and WORKDIR
 - [ ] New container per USER 
+
+
+## Kubernetes
+1. Setup kubernetes
+2. Run Docker
+3. If not working, execute Pluto locally
