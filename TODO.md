@@ -24,3 +24,6 @@
 1. Setup kubernetes
 2. Run Docker
 3. If not working, execute Pluto locally
+
+
+https://jupyterhub-kubespawner.readthedocs.io/en/latest/

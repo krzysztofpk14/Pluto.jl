@@ -76,13 +76,37 @@ function http_router_for(session::ServerSession)
                 "Your personal Pluto server is not ready. Please try again in a moment.")
         end
         
-        # Modify request to point to user's pod
+        # Parse the original request URI
         original_uri = HTTP.URI(request.target)
+        original_path = original_uri.path
+        
+        @info "Original request path: $original_path"
+        
+        # Rewrite the path to remove the /user/{username} prefix
+        user_prefix = "/user/$username"
+        rewritten_path = if startswith(original_path, user_prefix)
+            # Remove the user prefix from the path
+            remaining_path = original_path[length(user_prefix)+1:end]
+            # Ensure we have at least "/" 
+            if isempty(remaining_path)
+                "/"
+            else
+                # Make sure it starts with "/"
+                startswith(remaining_path, "/") ? remaining_path : "/" * remaining_path
+            end
+        else
+            # If path doesn't match expected pattern, default to root
+            "/"
+        end
+        
+        @info "Rewritten path: $rewritten_path"
+        
+        # Construct the pod URI with rewritten path
         pod_uri = HTTP.URI(
             scheme="http",
             host=pod_ip,
             port=8080,
-            path=original_uri.path,
+            path=rewritten_path,
             query=original_uri.query
         )
         
@@ -92,25 +116,47 @@ function http_router_for(session::ServerSession)
         try
             # Copy headers but filter out problematic ones
             filtered_headers = filter(request.headers) do (name, value)
-                lowercase(name) ∉ ["host", "connection", "upgrade"]
+                lowercase(name) ∉ ["host", "connection", "upgrade", "content-length"]
             end
+            
+            # Add correct host header for the pod
+            push!(filtered_headers, "Host" => "$pod_ip:8080")
+            
+            @info "Filtered headers: $filtered_headers"
             
             response = HTTP.request(
                 request.method,
                 string(pod_uri),
                 filtered_headers,
                 request.body;
-                connect_timeout=10,
-                readtimeout=30
+                connect_timeout=15,  # Increased timeout
+                readtimeout=30,
+                status_exception=false  # Don't throw on 4xx/5xx status
             )
             
-            @info "Successfully proxied request to user pod"
+            @info "Successfully proxied request to user pod, status: $(response.status)"
+            
+            # Log response for debugging
+            if response.status >= 400
+                @warn "Pod returned error status: $(response.status)"
+                @warn "Response headers: $(response.headers)"
+                @warn "Response body (first 500 chars): $(String(response.body)[1:min(500, length(response.body))])"
+            end
+            
             return response
             
         catch e
             @error "Failed to proxy to user pod: $e"
-            return error_response(502, "Pod Communication Error", 
-                "Could not communicate with your personal Pluto server.")
+            @error "Exception type: $(typeof(e))"
+            
+            # Provide more specific error message
+            error_msg = if isa(e, HTTP.Exceptions.ConnectError)
+                "Could not connect to your personal Pluto server. The server might still be starting up."
+            else
+                "Communication error with your personal Pluto server: $e"
+            end
+            
+            return error_response(502, "Pod Communication Error", error_msg)
         end
     end
 

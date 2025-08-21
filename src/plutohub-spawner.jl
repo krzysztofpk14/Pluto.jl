@@ -64,6 +64,24 @@ function spawn_user_pod(spawner::PlutoSpawner, username::String, user_id::String
                     Dict("name" => "PLUTO_PORT", "value" => "8080"),
                     Dict("name" => "PLUTO_MODE", "value" => "singleuser")
                 ],
+                # IMPORTANT: Override the command to run single-user Pluto
+                "command" => ["julia"],
+                "args" => [
+                    "--project=@.",
+                    "-e",
+                    """
+                    using Pluto
+                    println("Starting single-user Pluto server for: $username")
+                    println("Host: 0.0.0.0, Port: 8080")
+                    Pluto.run(
+                        launch_browser=false,
+                        port=8080,
+                        host="0.0.0.0",
+                        require_secret_for_access=false,
+                        require_secret_for_open_links=false
+                    )
+                    """
+                ],
                 "resources" => Dict(
                     "limits" => Dict(
                         "cpu" => spawner.cpu_limit,

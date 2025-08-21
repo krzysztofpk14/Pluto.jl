@@ -1,0 +1,74 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: plutohub-hub
+  namespace: plutohub
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: geniehub-hub
+  template:
+    metadata:
+      labels:
+        app: geniehub-hub
+    spec:
+      serviceAccountName: geniehub-hub  # This line is CRITICAL
+      containers:
+      - name: plutohub
+        image: plutohub:latest
+        imagePullPolicy: Never  # For local development
+        ports:
+        - containerPort: 8080
+        env:
+        - name: PLUTO_HOST
+          value: "0.0.0.0"
+        - name: PLUTO_PORT
+          value: "8080"
+        - name: PLUTO_MODE
+          value: "hub"
+        resources:
+          limits:
+            cpu: "1"
+            memory: "2Gi"
+          requests:
+            cpu: "100m"
+            memory: "256Mi"
+        volumeMounts:
+        - name: config
+          mountPath: /home/pluto/config
+        - name: hub-data
+          mountPath: /home/pluto/data
+      volumes:
+      - name: config
+        configMap:
+          name: plutohub-config
+      - name: hub-data
+        persistentVolumeClaim:
+          claimName: plutohub-hub-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: plutohub-hub
+  namespace: plutohub
+spec:
+  selector:
+    app: plutohub-hub
+  ports:
+  - port: 8080
+    targetPort: 8080
+  type: ClusterIP
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: plutohub-hub-data
+  namespace: plutohub
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+  storageClassName: hostpath
