@@ -1,21 +1,21 @@
 apiVersion: v1
 kind: Pod
 metadata:
-  name: pluto-{username}-{random}
+  name: pluto-user
   namespace: plutohub
   labels:
     app: plutohub-user
-    user: "{username}"
+    # user: "{username}"
 spec:
   containers:
-  - name: pluto-server
-    image: plutohub:latest
+  - name: pluto-container
+    image: pluto:latest
     imagePullPolicy: Never
     ports:
     - containerPort: 8080
     env:
-    - name: JUPYTERHUB_USER
-      value: "{username}"
+    # - name: JUPYTERHUB_USER
+    #   value: "{username}"
     - name: PLUTO_HOST
       value: "0.0.0.0"
     - name: PLUTO_PORT
@@ -33,17 +33,17 @@ spec:
         memory: "256Mi"
     volumeMounts:
     - name: user-home
-      mountPath: /home/pluto/users/{username}
+      mountPath: /home/pluto/users/ #{username}
   volumes:
   - name: user-home
     persistentVolumeClaim:
-      claimName: pluto-{username}-home
+      claimName: pluto-home
   restartPolicy: Never
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: pluto-{username}-home
+  name: pluto-home
   namespace: plutohub
 spec:
   accessModes:

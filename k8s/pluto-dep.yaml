@@ -1,67 +1,69 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: plutohub-hub
+  name: pluto-deployment
   namespace: plutohub
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: plutohub-hub
+      app: pluto-notebook
   template:
     metadata:
       labels:
-        app: plutohub-hub
+        app: pluto-notebook
     spec:
-      serviceAccount: geniehub-hub
+      serviceAccountName: geniehub-hub  # Add this line
       containers:
-      - name: plutohub
-        image: plutohub:latest
+      - name: pluto
+        image: pluto:latest
         imagePullPolicy: Never  # For local development
         ports:
         - containerPort: 8080
         env:
-        - name: PLUTO_HOST
+        - name: PLUTO_H
           value: "0.0.0.0"
         - name: PLUTO_PORT
           value: "8080"
-        - name: PLUTO_MODE
-          value: "hub"
+        resources:
+          limits:
+            cpu: "2"
+            memory: "4Gi"
+          requests:
+            cpu: "200m"
+            memory: "512Mi"
         volumeMounts:
-        # - name: config
-        #   mountPath: /home/pluto/config
-        - name: hub-data
-          mountPath: /home/pluto/data
+        - name: notebooks
+          mountPath: /home/pluto/notebooks
       volumes:
-      # - name: config
-      #   configMap:
-      #     name: plutohub-config
-      - name: hub-data
+      - name: notebooks
         persistentVolumeClaim:
-          claimName: plutohub-hub-data
+          claimName: pluto-notebooks-data
+      restartPolicy: Always
 ---
 apiVersion: v1
 kind: Service
 metadata:
-  name: plutohub-hub
+  name: pluto-service
   namespace: plutohub
 spec:
   selector:
-    app: plutohub-hub
+    app: pluto-notebook
   ports:
   - port: 8080
     targetPort: 8080
-  type: ClusterIP
+    nodePort: 30081  # External access port
+  type: NodePort
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: plutohub-hub-data
+  name: pluto-notebooks-data
   namespace: plutohub
 spec:
   accessModes:
     - ReadWriteOnce
   resources:
     requests:
-      storage: 1Gi
+      storage: 5Gi
   storageClassName: hostpath

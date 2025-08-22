@@ -48,11 +48,11 @@ function http_router_for(session::ServerSession)
         end
     end
 
-
-    function get_user_pod_ip(username::String, namespace::String="plutohub")::Union{String, Nothing}
+    function get_pod_ip(username::String, namespace::String="plutohub")::Union{String, Nothing}
         try
             # Get pods with user label
-            result = read(`kubectl get pods -n $namespace -l user=$username -o jsonpath='{.items[0].status.podIP}'`, String)
+            # result = read(`kubectl get pods $username -n $namespace  -o jsonpath='{.items[0].status.podIP}'`, String)
+            result = read(`kubectl get pods $username -n $namespace  -o jsonpath='{.status.podIP}'`, String)
             pod_ip = strip(result)
             
             if isempty(pod_ip)
@@ -68,97 +68,56 @@ function http_router_for(session::ServerSession)
         end
     end
 
-    function proxy_to_user_pod(request::HTTP.Request, username::String)
-        pod_ip = get_user_pod_ip(username)
+    function serve_proxy(req::HTTP.Request)
+        pod_name = "pluto-user"
         
+        # Get pod IP
+        pod_ip = get_pod_ip(pod_name)
         if pod_ip === nothing
-            return error_response(503, "Pod Not Available", 
-                "Your personal Pluto server is not ready. Please try again in a moment.")
+            return HTTP.Response(503, "Pod not found")
         end
         
-        # Parse the original request URI
-        original_uri = HTTP.URI(request.target)
-        original_path = original_uri.path
+        @info "Proxying to pod IP: $pod_ip"
+        @info "Original request path: $(req.target)"
         
-        @info "Original request path: $original_path"
-        
-        # Rewrite the path to remove the /user/{username} prefix
-        user_prefix = "/user/$username"
-        rewritten_path = if startswith(original_path, user_prefix)
-            # Remove the user prefix from the path
-            remaining_path = original_path[length(user_prefix)+1:end]
-            # Ensure we have at least "/" 
+        # Remove /proxy prefix and forward the rest to pod
+        original_path = req.target
+        if startswith(original_path, "/proxy")
+            # Remove "/proxy" prefix, keep the rest
+            remaining_path = original_path[8:end]  # 8 = length("/proxy") + 1
             if isempty(remaining_path)
-                "/"
-            else
-                # Make sure it starts with "/"
-                startswith(remaining_path, "/") ? remaining_path : "/" * remaining_path
+                remaining_path = "/"
             end
         else
-            # If path doesn't match expected pattern, default to root
-            "/"
+            remaining_path = original_path
         end
         
-        @info "Rewritten path: $rewritten_path"
+        @info "Rewritten path for pod: $remaining_path"
         
-        # Construct the pod URI with rewritten path
-        pod_uri = HTTP.URI(
-            scheme="http",
-            host=pod_ip,
-            port=8080,
-            path=rewritten_path,
-            query=original_uri.query
-        )
-        
-        @info "Proxying request to user pod: $(string(pod_uri))"
-        
-        # Forward request to user's pod
+        # Simple proxy - forward to pod with rewritten path
         try
-            # Copy headers but filter out problematic ones
-            filtered_headers = filter(request.headers) do (name, value)
-                lowercase(name) ∉ ["host", "connection", "upgrade", "content-length"]
-            end
-            
-            # Add correct host header for the pod
-            push!(filtered_headers, "Host" => "$pod_ip:8080")
-            
-            @info "Filtered headers: $filtered_headers"
+            target_url = "http://$(pod_ip):8080/$(remaining_path)"
+            @info "Target URL: $target_url"
             
             response = HTTP.request(
-                request.method,
-                string(pod_uri),
-                filtered_headers,
-                request.body;
-                connect_timeout=15,  # Increased timeout
-                readtimeout=30,
-                status_exception=false  # Don't throw on 4xx/5xx status
+                req.method,
+                target_url,
+                req.headers,
+                req.body;
+                status_exception=false
             )
             
-            @info "Successfully proxied request to user pod, status: $(response.status)"
-            
-            # Log response for debugging
-            if response.status >= 400
-                @warn "Pod returned error status: $(response.status)"
-                @warn "Response headers: $(response.headers)"
-                @warn "Response body (first 500 chars): $(String(response.body)[1:min(500, length(response.body))])"
-            end
-            
+            @info "Response status: $(response.status), Content-Type: $(HTTP.header(response, "Content-Type", "unknown"))"
             return response
             
         catch e
-            @error "Failed to proxy to user pod: $e"
-            @error "Exception type: $(typeof(e))"
-            
-            # Provide more specific error message
-            error_msg = if isa(e, HTTP.Exceptions.ConnectError)
-                "Could not connect to your personal Pluto server. The server might still be starting up."
-            else
-                "Communication error with your personal Pluto server: $e"
-            end
-            
-            return error_response(502, "Pod Communication Error", error_msg)
+            @error "Proxy failed: $e"
+            return HTTP.Response(502, "Proxy error: $e")
         end
     end
+    HTTP.register!(router, "GET", "/proxy", serve_proxy)
+    HTTP.register!(router, "GET", "/proxy/*", serve_proxy)  # This handles sub-paths
+    HTTP.register!(router, "POST", "/proxy/*", serve_proxy)
 
     # Login system routes
     HTTP.register!(router, "GET", "/login", create_serve_onefile(project_relative_path(frontend_directory(), "login.html")))
@@ -192,13 +151,13 @@ function http_router_for(session::ServerSession)
 
                 session_token = create_user_session(user, ip_address)
 
-                ### Pod Spawner System in Kuberetes ###
-                spawner = PlutoSpawner("plutohub", "plutohub:latest", "1", "2Gi", "5Gi"
-                )
+                # ### Pod Spawner System in Kuberetes ###
+                # spawner = PlutoSpawner("plutohub", "plutohub:latest", "1", "2Gi", "5Gi"
+                # )
                 
                 
-                pod_name = spawn_user_pod(spawner, user.username, string(user.id))
-                @info "Spawned pod for user $(user.username): $pod_name"
+                # pod_name = spawn_user_pod(spawner, user.username, string(user.id))
+                # @info "Spawned pod for user $(user.username): $pod_name"
 
                 
                     
@@ -949,12 +908,12 @@ function http_router_for(session::ServerSession)
             end
         end
         
-        # Check if user has a running pod, if so proxy to it
-        pod_ip = get_user_pod_ip(user.username)
-        if pod_ip !== nothing
-            @info "Proxying user home to pod for user: $(user.username)"
-            return proxy_to_user_pod(request, user.username)
-        end
+        # # Check if user has a running pod, if so proxy to it
+        # pod_ip = get_user_pod_ip(user.username)
+        # if pod_ip !== nothing
+        #     @info "Proxying user home to pod for user: $(user.username)"
+        #     return proxy_to_user_pod(request, user.username)
+        # end
         
         # Fallback to hub interface if no pod
         @info "No pod found, serving hub interface for user: $(user.username)"

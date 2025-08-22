@@ -34,4 +34,4 @@ ENV PLUTO_HOST=0.0.0.0
 ENV PLUTO_PORT=8080
 
 # Simple start command
-CMD ["julia", "--project=@.", "start_pluto.jl"]
+CMD ["julia", "--project=@.", "--color=yes", "start_pluto.jl"]
